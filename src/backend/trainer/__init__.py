@@ -17,6 +17,7 @@ from dataset import Dataset
 from model import GaussianModel
 from utils.general_utils import get_expon_lr_func, inverse_sigmoid, build_rotation
 from settings import Settings
+from tqdm import tqdm
 
 class Trainer:
     def __init__(self, model : GaussianModel, dataset : Dataset, settings : Settings):
@@ -132,9 +133,9 @@ class Trainer:
         self.model._opacity = optimizable_tensors["opacity"]
         self.model._scaling = optimizable_tensors["scaling"]
         self.model._rotation = optimizable_tensors["rotation"]
-        self.model.xyz_gradient_accum = self.xyz_gradient_accum[valid_points_mask]
-        self.model.denom = self.denom[valid_points_mask]
-        self.model.max_radii2D = self.max_radii2D[valid_points_mask]
+        self.model.xyz_gradient_accum = self.model.xyz_gradient_accum[valid_points_mask]
+        self.model.denom = self.model.denom[valid_points_mask]
+        self.model.max_radii2D = self.model.max_radii2D[valid_points_mask]
 
     def densification_postfix(self, new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation):
         d = {"xyz": new_xyz,
@@ -212,8 +213,7 @@ class Trainer:
         torch.cuda.empty_cache()
 
     def add_densification_stats(self, viewspace_point_tensor : torch.Tensor, update_filter):
-        
-        self.model.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=False)
+        self.model.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
         self.model.denom[update_filter] += 1
 
     def pre_iteration_checks(self, iteration): 
@@ -230,7 +230,7 @@ class Trainer:
 
             if iteration > self.settings.densify_from_iter and iteration % self.settings.densification_interval == 0:
                 size_threshold = 20 if iteration > self.settings.opacity_reset_interval else None
-                self.model.densify_and_prune(self.settings.densify_grad_threshold, 0.005, self.dataset.cameras_extent, size_threshold)
+                self.densify_and_prune(self.settings.densify_grad_threshold, 0.005, self.dataset.cameras_extent, size_threshold)
             
             if iteration % self.settings.opacity_reset_interval == 0 or \
                 (self.dataset.white_background and iteration == self.settings.densify_from_iter):
@@ -266,4 +266,10 @@ class Trainer:
         self.loss_values_each_iter.append(loss.item())
 
         self._iteration += 1
+        return image, loss.item(), self.ema_loss
     
+    def train_all(self):
+        t = tqdm(range(self._iteration, self.settings.iterations))
+        for iter in t:
+            img, loss, ema_loss = self.step()
+            t.set_description(f"[{self._iteration+1}/{self.settings.iterations}] loss: {ema_loss:0.04f}")

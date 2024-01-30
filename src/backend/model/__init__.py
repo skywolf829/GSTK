@@ -148,8 +148,8 @@ class GaussianModel:
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
-        self.xyz_gradient_accum = torch.zeros([self.get_num_gaussians], dtype=torch.float32, device="cuda")
-        self.denom = torch.zeros([self.get_num_gaussians], dtype=torch.int, device="cuda")
+        self.xyz_gradient_accum = torch.zeros([self.get_num_gaussians, 1], dtype=torch.float32, device="cuda")
+        self.denom = torch.zeros([self.get_num_gaussians, 1], dtype=torch.int, device="cuda")
 
     def construct_list_of_attributes(self):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']

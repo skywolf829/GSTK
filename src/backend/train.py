@@ -51,7 +51,7 @@ if __name__ == "__main__":
     trainer = Trainer(gaussians, dataset, settings)
     trainer.training_setup()
 
-    trainer.step()
+    trainer.train_all()
 
     # All done
     print("\nTraining complete.")
