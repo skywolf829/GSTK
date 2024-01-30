@@ -9,214 +9,261 @@
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-import os
 import torch
-from random import randint
 from utils.loss_utils import l1_loss, ssim
-from model import render, network_gui
 import sys
-from dataset import Scene, GaussianModel
-from utils.general_utils import safe_state
-import uuid
-from tqdm import tqdm
-from utils.image_utils import psnr
-from argparse import ArgumentParser, Namespace
-from settings import ModelParams, PipelineParams, OptimizationParams
-try:
-    from torch.utils.tensorboard import SummaryWriter
-    TENSORBOARD_FOUND = True
-except ImportError:
-    TENSORBOARD_FOUND = False
+from torch import nn
+from dataset import Dataset
+from model import GaussianModel
+from utils.general_utils import get_expon_lr_func, inverse_sigmoid, build_rotation
+from settings import Settings
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from):
-    first_iter = 0
-    tb_writer = prepare_output_and_logger(dataset)
-    gaussians = GaussianModel(dataset.sh_degree)
-    scene = Scene(dataset, gaussians)
-    gaussians.training_setup(opt)
-    if checkpoint:
-        (model_params, first_iter) = torch.load(checkpoint)
-        gaussians.restore(model_params, opt)
+class Trainer:
+    def __init__(self, model : GaussianModel, dataset : Dataset, settings : Settings):
+        self.model : GaussianModel = model
+        self.dataset = dataset
+        self.settings = settings
 
-    bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
-    background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+        self.optimizer = None
+        self.xyz_scheduler_args = None
 
-    iter_start = torch.cuda.Event(enable_timing = True)
-    iter_end = torch.cuda.Event(enable_timing = True)
+        self._iteration = 0
+        self.ema_loss = 0.0
+        self.training = False
+        self.loss_values_each_iter = []
+        self.step_times_each_iter = []
+    
+    def training_setup(self):
+        self.percent_dense = self.settings.percent_dense
+        self.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device="cuda")
+        self.denom = torch.zeros((self.model.get_num_gaussians, 1), device="cuda")
 
-    viewpoint_stack = None
-    ema_loss_for_log = 0.0
-    progress_bar = tqdm(range(first_iter, opt.iterations), desc="Training progress")
-    first_iter += 1
-    for iteration in range(first_iter, opt.iterations + 1):        
-        if network_gui.conn == None:
-            network_gui.try_connect()
-        while network_gui.conn != None:
-            try:
-                net_image_bytes = None
-                custom_cam, do_training, pipe.convert_SHs_python, pipe.compute_cov3D_python, keep_alive, scaling_modifer = network_gui.receive()
-                if custom_cam != None:
-                    net_image = render(custom_cam, gaussians, pipe, background, scaling_modifer)["render"]
-                    net_image_bytes = memoryview((torch.clamp(net_image, min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy())
-                network_gui.send(net_image_bytes, dataset.source_path)
-                if do_training and ((iteration < int(opt.iterations)) or not keep_alive):
-                    break
-            except Exception as e:
-                network_gui.conn = None
+        l = [
+            {'params': [self.model._xyz], 'lr': self.settings.position_lr_init * self.settings.spatial_lr_scale, "name": "xyz"},
+            {'params': [self.model._features_dc], 'lr': self.settings.feature_lr, "name": "f_dc"},
+            {'params': [self.model._features_rest], 'lr': self.settings.feature_lr / 20.0, "name": "f_rest"},
+            {'params': [self.model._opacity], 'lr': self.settings.opacity_lr, "name": "opacity"},
+            {'params': [self.model._scaling], 'lr': self.settings.scaling_lr, "name": "scaling"},
+            {'params': [self.model._rotation], 'lr': self.settings.rotation_lr, "name": "rotation"}
+        ]
 
-        iter_start.record()
+        self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
+        self.xyz_scheduler_args = get_expon_lr_func(lr_init=self.settings.position_lr_init*self.settings.spatial_lr_scale,
+                                                    lr_final=self.settings.position_lr_final*self.settings.spatial_lr_scale,
+                                                    lr_delay_mult=self.settings.position_lr_delay_mult,
+                                                    max_steps=self.settings.position_lr_max_steps)
 
-        gaussians.update_learning_rate(iteration)
+    def update_learning_rate(self, iteration):
+        ''' Learning rate scheduling per step '''
+        for param_group in self.optimizer.param_groups:
+            if param_group["name"] == "xyz":
+                lr = self.xyz_scheduler_args(iteration)
+                param_group['lr'] = lr
+                return lr    
+    
+    def reset_opacity(self):
+        opacities_new = inverse_sigmoid(torch.min(self.model.get_opacity, 
+                        torch.ones_like(self.model.get_opacity)*0.01))
+        optimizable_tensors = self.replace_tensor_to_optimizer(opacities_new, "opacity")
+        self.model._opacity = optimizable_tensors["opacity"]
 
-        # Every 1000 its we increase the levels of SH up to a maximum degree
-        if iteration % 1000 == 0:
-            gaussians.oneupSHdegree()
+    def replace_tensor_to_optimizer(self, tensor, name):
+        optimizable_tensors = {}
+        for group in self.optimizer.param_groups:
+            if group["name"] == name:
+                stored_state = self.optimizer.state.get(group['params'][0], None)
+                stored_state["exp_avg"] = torch.zeros_like(tensor)
+                stored_state["exp_avg_sq"] = torch.zeros_like(tensor)
 
-        # Pick a random Camera
-        if not viewpoint_stack:
-            viewpoint_stack = scene.getTrainCameras().copy()
-        viewpoint_cam = viewpoint_stack.pop(randint(0, len(viewpoint_stack)-1))
+                del self.optimizer.state[group['params'][0]]
+                group["params"][0] = nn.Parameter(tensor.requires_grad_(True))
+                self.optimizer.state[group['params'][0]] = stored_state
 
-        # Render
-        if (iteration - 1) == debug_from:
-            pipe.debug = True
+                optimizable_tensors[group["name"]] = group["params"][0]
+        return optimizable_tensors
 
-        bg = torch.rand((3), device="cuda") if opt.random_background else background
+    def _prune_optimizer(self, mask):
+        optimizable_tensors = {}
+        for group in self.optimizer.param_groups:
+            stored_state = self.optimizer.state.get(group['params'][0], None)
+            if stored_state is not None:
+                stored_state["exp_avg"] = stored_state["exp_avg"][mask]
+                stored_state["exp_avg_sq"] = stored_state["exp_avg_sq"][mask]
 
-        render_pkg = render(viewpoint_cam, gaussians, pipe, bg)
-        image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], render_pkg["visibility_filter"], render_pkg["radii"]
+                del self.optimizer.state[group['params'][0]]
+                group["params"][0] = nn.Parameter((group["params"][0][mask].requires_grad_(True)))
+                self.optimizer.state[group['params'][0]] = stored_state
+
+                optimizable_tensors[group["name"]] = group["params"][0]
+            else:
+                group["params"][0] = nn.Parameter(group["params"][0][mask].requires_grad_(True))
+                optimizable_tensors[group["name"]] = group["params"][0]
+        return optimizable_tensors
+
+    def cat_tensors_to_optimizer(self, tensors_dict):
+        optimizable_tensors = {}
+        for group in self.optimizer.param_groups:
+            assert len(group["params"]) == 1
+            extension_tensor = tensors_dict[group["name"]]
+            stored_state = self.optimizer.state.get(group['params'][0], None)
+            if stored_state is not None:
+
+                stored_state["exp_avg"] = torch.cat((stored_state["exp_avg"], torch.zeros_like(extension_tensor)), dim=0)
+                stored_state["exp_avg_sq"] = torch.cat((stored_state["exp_avg_sq"], torch.zeros_like(extension_tensor)), dim=0)
+
+                del self.optimizer.state[group['params'][0]]
+                group["params"][0] = nn.Parameter(torch.cat((group["params"][0], extension_tensor), dim=0).requires_grad_(True))
+                self.optimizer.state[group['params'][0]] = stored_state
+
+                optimizable_tensors[group["name"]] = group["params"][0]
+            else:
+                group["params"][0] = nn.Parameter(torch.cat((group["params"][0], extension_tensor), dim=0).requires_grad_(True))
+                optimizable_tensors[group["name"]] = group["params"][0]
+
+        return optimizable_tensors
+
+    def prune_points(self, mask):
+        valid_points_mask = ~mask
+        optimizable_tensors = self._prune_optimizer(valid_points_mask)
+
+        self.model._xyz = optimizable_tensors["xyz"]
+        self.model._features_dc = optimizable_tensors["f_dc"]
+        self.model._features_rest = optimizable_tensors["f_rest"]
+        self.model._opacity = optimizable_tensors["opacity"]
+        self.model._scaling = optimizable_tensors["scaling"]
+        self.model._rotation = optimizable_tensors["rotation"]
+        self.model.xyz_gradient_accum = self.xyz_gradient_accum[valid_points_mask]
+        self.model.denom = self.denom[valid_points_mask]
+        self.model.max_radii2D = self.max_radii2D[valid_points_mask]
+
+    def densification_postfix(self, new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation):
+        d = {"xyz": new_xyz,
+        "f_dc": new_features_dc,
+        "f_rest": new_features_rest,
+        "opacity": new_opacities,
+        "scaling" : new_scaling,
+        "rotation" : new_rotation}
+
+        optimizable_tensors = self.cat_tensors_to_optimizer(d)
+        self.model._xyz = optimizable_tensors["xyz"]
+        self.model._features_dc = optimizable_tensors["f_dc"]
+        self.model._features_rest = optimizable_tensors["f_rest"]
+        self.model._opacity = optimizable_tensors["opacity"]
+        self.model._scaling = optimizable_tensors["scaling"]
+        self.model._rotation = optimizable_tensors["rotation"]
+        self.model.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device="cuda")
+        self.model.denom = torch.zeros((self.model.get_num_gaussians, 1), device="cuda")
+        self.model.max_radii2D = torch.zeros((self.model.get_num_gaussians), device="cuda")
+
+    def densify_and_split(self, grads : torch.Tensor, grad_threshold, scene_extent, N=2):
+        n_init_points = self.model.get_num_gaussians
+        # Extract points that satisfy the gradient condition
+        padded_grad = torch.zeros((n_init_points), device="cuda")
+        padded_grad[:grads.shape[0]] = grads.squeeze()
+        selected_pts_mask = torch.where(padded_grad >= grad_threshold, True, False)
+        selected_pts_mask = torch.logical_and(selected_pts_mask,
+                    torch.max(self.model.get_scaling, dim=1).values > self.percent_dense*scene_extent)
+
+        stds = self.model.get_scaling[selected_pts_mask].repeat(N,1)
+        means = torch.zeros((stds.size(0), 3),device="cuda")
+        samples = torch.normal(mean=means, std=stds)
+        rots = build_rotation(self.model._rotation[selected_pts_mask]).repeat(N,1,1)
+        new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.model.get_xyz[selected_pts_mask].repeat(N, 1)
+        new_scaling = self.model.scaling_inverse_activation(self.model.get_scaling[selected_pts_mask].repeat(N,1) / (0.8*N))
+        new_rotation = self.model._rotation[selected_pts_mask].repeat(N,1)
+        new_features_dc = self.model._features_dc[selected_pts_mask].repeat(N,1,1)
+        new_features_rest = self.model._features_rest[selected_pts_mask].repeat(N,1,1)
+        new_opacity = self.model._opacity[selected_pts_mask].repeat(N,1)
+
+        self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
+
+        prune_filter = torch.cat((selected_pts_mask, torch.zeros(N * selected_pts_mask.sum(), device="cuda", dtype=bool)))
+        self.prune_points(prune_filter)
+
+    def densify_and_clone(self, grads : torch.Tensor, grad_threshold, scene_extent):
+        # Extract points that satisfy the gradient condition
+        selected_pts_mask = torch.where(torch.norm(grads, dim=-1) >= grad_threshold, True, False)
+        selected_pts_mask = torch.logical_and(selected_pts_mask,
+                    torch.max(self.model.get_scaling, dim=1).values <= self.percent_dense*scene_extent)
+        
+        new_xyz = self.model._xyz[selected_pts_mask]
+        new_features_dc = self.model._features_dc[selected_pts_mask]
+        new_features_rest = self.model._features_rest[selected_pts_mask]
+        new_opacities = self.model._opacity[selected_pts_mask]
+        new_scaling = self.model._scaling[selected_pts_mask]
+        new_rotation = self.model._rotation[selected_pts_mask]
+
+        self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
+
+    def densify_and_prune(self, max_grad : torch.Tensor, min_opacity, extent, max_screen_size):
+        grads = self.model.xyz_gradient_accum / self.model.denom
+        grads[grads.isnan()] = 0.0
+
+        self.densify_and_clone(grads, max_grad, extent)
+        self.densify_and_split(grads, max_grad, extent)
+
+        prune_mask = (self.model.get_opacity < min_opacity).squeeze()
+        if max_screen_size:
+            big_points_vs = self.model.max_radii2D > max_screen_size
+            big_points_ws = self.model.get_scaling.max(dim=1).values > 0.1 * extent
+            prune_mask = torch.logical_or(torch.logical_or(prune_mask, big_points_vs), big_points_ws)
+        self.prune_points(prune_mask)
+
+        torch.cuda.empty_cache()
+
+    def add_densification_stats(self, viewspace_point_tensor : torch.Tensor, update_filter):
+        
+        self.model.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=False)
+        self.model.denom[update_filter] += 1
+
+    def pre_iteration_checks(self, iteration): 
+        self.update_learning_rate(iteration)
+        if self._iteration % 1000 == 0:
+            self.model.oneupSHdegree()
+
+    def post_iteration_checks(self, iteration, viewspace_point_tensor, visibility_filter, radii):
+        # Densification
+        if iteration < self.settings.densify_until_iter:
+            # Keep track of max radii in image-space for pruning
+            self.model.max_radii2D[visibility_filter] = torch.max(self.model.max_radii2D[visibility_filter], radii[visibility_filter])
+            self.add_densification_stats(viewspace_point_tensor, visibility_filter)
+
+            if iteration > self.settings.densify_from_iter and iteration % self.settings.densification_interval == 0:
+                size_threshold = 20 if iteration > self.settings.opacity_reset_interval else None
+                self.model.densify_and_prune(self.settings.densify_grad_threshold, 0.005, self.dataset.cameras_extent, size_threshold)
+            
+            if iteration % self.settings.opacity_reset_interval == 0 or \
+                (self.dataset.white_background and iteration == self.settings.densify_from_iter):
+                self.reset_opacity()
+
+    def step(self):
+        # Events for timing the step
+        # Checks for the optimizer/model to update 
+        self.pre_iteration_checks(self._iteration)
+
+        # Get data for this iteration and render
+        viewpoint_cam = self.dataset[self._iteration]
+        render_pkg = self.model.render(viewpoint_cam)
+        image, viewspace_point_tensor, visibility_filter, radii = render_pkg["render"], render_pkg["viewspace_points"], \
+                        render_pkg["visibility_filter"], render_pkg["radii"]
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
         Ll1 = l1_loss(image, gt_image)
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+        loss = (1.0 - self.settings.lambda_dssim) * Ll1 + \
+            self.settings.lambda_dssim * (1.0 - ssim(image, gt_image))
         loss.backward()
 
-        iter_end.record()
+        # Optimizer step
+        self.optimizer.step()
+        self.optimizer.zero_grad(set_to_none = True)
 
         with torch.no_grad():
             # Progress bar
-            ema_loss_for_log = 0.4 * loss.item() + 0.6 * ema_loss_for_log
-            if iteration % 10 == 0:
-                progress_bar.set_postfix({"Loss": f"{ema_loss_for_log:.{7}f}"})
-                progress_bar.update(10)
-            if iteration == opt.iterations:
-                progress_bar.close()
+            self.ema_loss = 0.4 * loss.item() + 0.6 * self.ema_loss
+            self.post_iteration_checks(self._iteration, viewspace_point_tensor, visibility_filter, radii)
 
-            # Log and save
-            training_report(tb_writer, iteration, Ll1, loss, l1_loss, iter_start.elapsed_time(iter_end), testing_iterations, scene, render, (pipe, background))
-            if (iteration in saving_iterations):
-                print("\n[ITER {}] Saving Gaussians".format(iteration))
-                scene.save(iteration)
+        self.loss_values_each_iter.append(loss.item())
 
-            # Densification
-            if iteration < opt.densify_until_iter:
-                # Keep track of max radii in image-space for pruning
-                gaussians.max_radii2D[visibility_filter] = torch.max(gaussians.max_radii2D[visibility_filter], radii[visibility_filter])
-                gaussians.add_densification_stats(viewspace_point_tensor, visibility_filter)
-
-                if iteration > opt.densify_from_iter and iteration % opt.densification_interval == 0:
-                    size_threshold = 20 if iteration > opt.opacity_reset_interval else None
-                    gaussians.densify_and_prune(opt.densify_grad_threshold, 0.005, scene.cameras_extent, size_threshold)
-                
-                if iteration % opt.opacity_reset_interval == 0 or (dataset.white_background and iteration == opt.densify_from_iter):
-                    gaussians.reset_opacity()
-
-            # Optimizer step
-            if iteration < opt.iterations:
-                gaussians.optimizer.step()
-                gaussians.optimizer.zero_grad(set_to_none = True)
-
-            if (iteration in checkpoint_iterations):
-                print("\n[ITER {}] Saving Checkpoint".format(iteration))
-                torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
-
-def prepare_output_and_logger(args):    
-    if not args.model_path:
-        if os.getenv('OAR_JOB_ID'):
-            unique_str=os.getenv('OAR_JOB_ID')
-        else:
-            unique_str = str(uuid.uuid4())
-        args.model_path = os.path.join("./output/", unique_str[0:10])
-        
-    # Set up output folder
-    print("Output folder: {}".format(args.model_path))
-    os.makedirs(args.model_path, exist_ok = True)
-    with open(os.path.join(args.model_path, "cfg_args"), 'w') as cfg_log_f:
-        cfg_log_f.write(str(Namespace(**vars(args))))
-
-    # Create Tensorboard writer
-    tb_writer = None
-    if TENSORBOARD_FOUND:
-        tb_writer = SummaryWriter(args.model_path)
-    else:
-        print("Tensorboard not available: not logging progress")
-    return tb_writer
-
-def training_report(tb_writer, iteration, Ll1, loss, l1_loss, elapsed, testing_iterations, scene : Scene, renderFunc, renderArgs):
-    if tb_writer:
-        tb_writer.add_scalar('train_loss_patches/l1_loss', Ll1.item(), iteration)
-        tb_writer.add_scalar('train_loss_patches/total_loss', loss.item(), iteration)
-        tb_writer.add_scalar('iter_time', elapsed, iteration)
-
-    # Report test and samples of training set
-    if iteration in testing_iterations:
-        torch.cuda.empty_cache()
-        validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()}, 
-                              {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})
-
-        for config in validation_configs:
-            if config['cameras'] and len(config['cameras']) > 0:
-                l1_test = 0.0
-                psnr_test = 0.0
-                for idx, viewpoint in enumerate(config['cameras']):
-                    image = torch.clamp(renderFunc(viewpoint, scene.gaussians, *renderArgs)["render"], 0.0, 1.0)
-                    gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
-                    if tb_writer and (idx < 5):
-                        tb_writer.add_images(config['name'] + "_view_{}/render".format(viewpoint.image_name), image[None], global_step=iteration)
-                        if iteration == testing_iterations[0]:
-                            tb_writer.add_images(config['name'] + "_view_{}/ground_truth".format(viewpoint.image_name), gt_image[None], global_step=iteration)
-                    l1_test += l1_loss(image, gt_image).mean().double()
-                    psnr_test += psnr(image, gt_image).mean().double()
-                psnr_test /= len(config['cameras'])
-                l1_test /= len(config['cameras'])          
-                print("\n[ITER {}] Evaluating {}: L1 {} PSNR {}".format(iteration, config['name'], l1_test, psnr_test))
-                if tb_writer:
-                    tb_writer.add_scalar(config['name'] + '/loss_viewpoint - l1_loss', l1_test, iteration)
-                    tb_writer.add_scalar(config['name'] + '/loss_viewpoint - psnr', psnr_test, iteration)
-
-        if tb_writer:
-            tb_writer.add_histogram("scene/opacity_histogram", scene.gaussians.get_opacity, iteration)
-            tb_writer.add_scalar('total_points', scene.gaussians.get_xyz.shape[0], iteration)
-        torch.cuda.empty_cache()
-
-if __name__ == "__main__":
-    # Set up command line argument parser
-    parser = ArgumentParser(description="Training script parameters")
-    lp = ModelParams(parser)
-    op = OptimizationParams(parser)
-    pp = PipelineParams(parser)
-    parser.add_argument('--ip', type=str, default="127.0.0.1")
-    parser.add_argument('--port', type=int, default=6009)
-    parser.add_argument('--debug_from', type=int, default=-1)
-    parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000, 30_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 30_000])
-    parser.add_argument("--quiet", action="store_true")
-    parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
-    parser.add_argument("--start_checkpoint", type=str, default = None)
-    args = parser.parse_args(sys.argv[1:])
-    args.save_iterations.append(args.iterations)
+        self._iteration += 1
     
-    print("Optimizing " + args.model_path)
-
-    # Initialize system state (RNG)
-    safe_state(args.quiet)
-
-    # Start GUI server, configure and run training
-    network_gui.init(args.ip, args.port)
-    torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from)
-
-    # All done
-    print("\nTraining complete.")

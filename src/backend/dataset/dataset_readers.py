@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
-from dataset.gaussian_model import BasicPointCloud
+from utils.graphics_utils import BasicPointCloud
 
 class CameraInfo(NamedTuple):
     uid: int
