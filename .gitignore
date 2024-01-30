@@ -1,3 +1,3 @@
 
-src/backend/CUDA_renderer/build
-src/backend/CUDA_knn/build
+src/backend/submodules/CUDA_renderer/build
+src/backend/submodules/CUDA_knn/build
