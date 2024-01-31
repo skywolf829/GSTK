@@ -94,6 +94,8 @@ class ServerCommunicator(threading.Thread):
             if(self.conn.poll()):
                 # Blocking call, will wait here
                 item = self.conn.recv()
+            else:
+                item = None
         except Exception:
             print(f"Connection closed")
             self.state = "uninitialized"
