@@ -4,13 +4,9 @@ from dataset import Dataset
 from model import GaussianModel
 from trainer import Trainer
 from argparse import ArgumentParser
-import torch
 from utils.system_utils import mkdir_p
 from settings import Settings
-import socket
 import threading
-import json
-import multiprocessing
 import multiprocessing.connection as connection
 import signal 
 

@@ -1,6 +1,4 @@
 import dearpygui.dearpygui as dpg
-import socket
-import multiprocessing
 import multiprocessing.connection as connection
 import uuid
 import threading
