@@ -18,10 +18,16 @@ from torch import nn
 from utils.system_utils import mkdir_p
 from plyfile import PlyData, PlyElement
 from utils.sh_utils import RGB2SH
-from simple_knn._C import distCUDA2
+try:
+    from simple_knn._C import distCUDA2
+    from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+    cuda_packages_imported = True
+except Exception as e:
+    print("CUDA packages not found - running without")
+    cuda_packages_imported = False
+
 from utils.graphics_utils import BasicPointCloud
 import math
-from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from settings import Settings
 
 class GaussianModel:
@@ -37,12 +43,13 @@ class GaussianModel:
         self.rotation_activation = torch.nn.functional.normalize
 
     def __init__(self, settings):
+        self.settings = settings
         self.active_sh_degree = 0
         self.max_sh_degree = settings.sh_degree  
         if(settings.white_background):
-            bg = torch.tensor([1.,1.,1.], device="cuda")
+            bg = torch.tensor([1.,1.,1.], device=self.settings.device)
         elif(not settings.random_background):
-            bg = torch.tensor([0.,0.,0.], device="cuda")
+            bg = torch.tensor([0.,0.,0.], device=self.settings.device)
         else:
             bg = None
         self.background = bg
@@ -126,20 +133,25 @@ class GaussianModel:
 
     def create_from_pcd(self, pcd : BasicPointCloud, settings : Settings):
         self.spatial_lr_scale = settings.spatial_lr_scale
-        fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
-        fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
-        features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
+        fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().to(self.settings.device)
+        fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().to(self.settings.device))
+        features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().to(self.settings.device)
         features[:, :3, 0 ] = fused_color
         features[:, 3:, 1:] = 0.0
 
         print("Number of points at initialisation : ", fused_point_cloud.shape[0])
 
-        dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
+        if(cuda_packages_imported):
+            dist2 = torch.clamp_min(distCUDA2(
+                torch.from_numpy(np.asarray(pcd.points)).float().to(self.settings.device)), 0.0000001)
+        else:
+            dist2 = torch.ones([pcd.points.shape[0], 1], 
+                               device=self.settings.device, dtype=torch.float32) * 0.001
         scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
-        rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
+        rots = torch.zeros((fused_point_cloud.shape[0], 4), device=self.settings.device)
         rots[:, 0] = 1
 
-        opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
+        opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device=self.settings.device))
 
         self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
         self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
@@ -147,9 +159,9 @@ class GaussianModel:
         self._scaling = nn.Parameter(scales.requires_grad_(True))
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
-        self.xyz_gradient_accum = torch.zeros([self.get_num_gaussians, 1], dtype=torch.float32, device="cuda")
-        self.denom = torch.zeros([self.get_num_gaussians, 1], dtype=torch.int, device="cuda")
+        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device=self.settings.device)
+        self.xyz_gradient_accum = torch.zeros([self.get_num_gaussians, 1], dtype=torch.float32, device=self.settings.device)
+        self.denom = torch.zeros([self.get_num_gaussians, 1], dtype=torch.int, device=self.settings.device)
 
     def construct_list_of_attributes(self):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
@@ -218,12 +230,12 @@ class GaussianModel:
         for idx, attr_name in enumerate(rot_names):
             rots[:, idx] = np.asarray(plydata.elements[0][attr_name])
 
-        self._xyz = nn.Parameter(torch.tensor(xyz, dtype=torch.float, device="cuda").requires_grad_(True))
-        self._features_dc = nn.Parameter(torch.tensor(features_dc, dtype=torch.float, device="cuda").transpose(1, 2).contiguous().requires_grad_(True))
-        self._features_rest = nn.Parameter(torch.tensor(features_extra, dtype=torch.float, device="cuda").transpose(1, 2).contiguous().requires_grad_(True))
-        self._opacity = nn.Parameter(torch.tensor(opacities, dtype=torch.float, device="cuda").requires_grad_(True))
-        self._scaling = nn.Parameter(torch.tensor(scales, dtype=torch.float, device="cuda").requires_grad_(True))
-        self._rotation = nn.Parameter(torch.tensor(rots, dtype=torch.float, device="cuda").requires_grad_(True))
+        self._xyz = nn.Parameter(torch.tensor(xyz, dtype=torch.float, device=self.settings.device).requires_grad_(True))
+        self._features_dc = nn.Parameter(torch.tensor(features_dc, dtype=torch.float, device=self.settings.device).transpose(1, 2).contiguous().requires_grad_(True))
+        self._features_rest = nn.Parameter(torch.tensor(features_extra, dtype=torch.float, device=self.settings.device).transpose(1, 2).contiguous().requires_grad_(True))
+        self._opacity = nn.Parameter(torch.tensor(opacities, dtype=torch.float, device=self.settings.device).requires_grad_(True))
+        self._scaling = nn.Parameter(torch.tensor(scales, dtype=torch.float, device=self.settings.device).requires_grad_(True))
+        self._rotation = nn.Parameter(torch.tensor(rots, dtype=torch.float, device=self.settings.device).requires_grad_(True))
 
         self.active_sh_degree = self.max_sh_degree
 
@@ -234,13 +246,25 @@ class GaussianModel:
         Background tensor (bg_color) must be on GPU!
         """
     
+    
         # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
         screenspace_points = torch.zeros_like(self.get_xyz, dtype=self.get_xyz.dtype, 
-                            requires_grad=True, device="cuda") + 0
+                            requires_grad=True, device=self.settings.device) + 0
         try:
             screenspace_points.retain_grad()
         except:
             pass
+
+        if(not cuda_packages_imported):
+            fake_img = torch.rand([int(viewpoint_camera.image_height),
+                               int(viewpoint_camera.image_width, 3)],
+                               dtype=torch.float32, device=self.settings.device)
+            radii = torch.zeros_like(self.get_xyz, dtype=self.get_xyz.dtype, 
+                            requires_grad=True, device=self.settings.device) + 1.0
+            {"render": fake_img,
+                "viewspace_points": screenspace_points,
+                "visibility_filter" : radii > 0,
+                "radii": radii}
 
         # Set up rasterization configuration
         tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
@@ -251,7 +275,8 @@ class GaussianModel:
             image_width=int(viewpoint_camera.image_width),
             tanfovx=tanfovx,
             tanfovy=tanfovy,
-            bg=self.background if self.background is not None else torch.rand([3], device="cuda", dtype=torch.float32),
+            bg=self.background if self.background is not None \
+                else torch.rand([3], device=self.settings.device, dtype=torch.float32),
             scale_modifier=scaling_modifier,
             viewmatrix=viewpoint_camera.world_view_transform,
             projmatrix=viewpoint_camera.full_proj_transform,

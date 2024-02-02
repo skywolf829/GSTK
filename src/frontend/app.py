@@ -6,7 +6,7 @@ import threading
 from windows.MainWindow import MainWindow
 from windows.ServerConnectWindow import ServerConnectWindow
 from windows.TestWindow import TestWindow
-
+from windows.RenderWindow import RenderWindow
 
 class AppController:
     def __init__(self):
@@ -28,6 +28,7 @@ class AppController:
 
         MainWindow()
         self.server_connect_window = ServerConnectWindow(self)
+        self.render_window = RenderWindow(self)
 
         dpg.setup_dearpygui()
         dpg.show_viewport()
@@ -61,6 +62,10 @@ class AppController:
                 dpg.add_menu_item(label="Server connection", 
                     tag="server_connector_menu_item", 
                     callback=lambda:ServerConnectWindow(self),
+                    check=True, default_value=True)
+                dpg.add_menu_item(label="Render view", 
+                    tag="render_window_menu_item", 
+                    callback=lambda:RenderWindow(self),
                     check=True, default_value=True)
                 dpg.add_menu_item(label="New test window", 
                     callback=lambda: self.create_test_window())
@@ -167,6 +172,13 @@ class AppCommunicator(threading.Thread):
             self.conn = None
             self.connected = False
             self.app_controller.update_connection(self.connected)
+
+    def send_message(self, data):
+        if(self.conn is not None and self.connected):
+            try:
+                self.conn.send(data)
+            except Exception as e:
+                print("Could not send data")
 
 if __name__ == "__main__":
     a = AppController()

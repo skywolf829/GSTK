@@ -1,6 +1,7 @@
 import dearpygui.dearpygui as dpg
+from windows import Window
 
-class ServerConnectWindow:
+class ServerConnectWindow(Window):
     def __init__(self, app_controller):
         self.app_controller = app_controller
         self.button = None
@@ -9,7 +10,9 @@ class ServerConnectWindow:
             self.on_close()
             del self
             return
-        with dpg.window(label="Server", tag=self.tag, on_close=self.on_close):
+        with dpg.window(label="Server", 
+                        tag=self.tag, on_close=self.on_close,
+                        width=450, height=150):
             dpg.add_input_text(label="Server IP", tag="server_ip", default_value="127.0.0.1")
             dpg.add_input_text(label="Server port",tag="server_port",  default_value="10789")
             with dpg.group(horizontal=True):

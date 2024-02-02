@@ -36,8 +36,8 @@ class Trainer:
     
     def training_setup(self):
         self.percent_dense = self.settings.percent_dense
-        self.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device="cuda")
-        self.denom = torch.zeros((self.model.get_num_gaussians, 1), device="cuda")
+        self.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
+        self.denom = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
 
         l = [
             {'params': [self.model._xyz], 'lr': self.settings.position_lr_init * self.settings.spatial_lr_scale, "name": "xyz"},
@@ -152,21 +152,21 @@ class Trainer:
         self.model._opacity = optimizable_tensors["opacity"]
         self.model._scaling = optimizable_tensors["scaling"]
         self.model._rotation = optimizable_tensors["rotation"]
-        self.model.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device="cuda")
-        self.model.denom = torch.zeros((self.model.get_num_gaussians, 1), device="cuda")
-        self.model.max_radii2D = torch.zeros((self.model.get_num_gaussians), device="cuda")
+        self.model.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
+        self.model.denom = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
+        self.model.max_radii2D = torch.zeros((self.model.get_num_gaussians), device=self.settings.device)
 
     def densify_and_split(self, grads : torch.Tensor, grad_threshold, scene_extent, N=2):
         n_init_points = self.model.get_num_gaussians
         # Extract points that satisfy the gradient condition
-        padded_grad = torch.zeros((n_init_points), device="cuda")
+        padded_grad = torch.zeros((n_init_points), device=self.settings.device)
         padded_grad[:grads.shape[0]] = grads.squeeze()
         selected_pts_mask = torch.where(padded_grad >= grad_threshold, True, False)
         selected_pts_mask = torch.logical_and(selected_pts_mask,
                     torch.max(self.model.get_scaling, dim=1).values > self.percent_dense*scene_extent)
 
         stds = self.model.get_scaling[selected_pts_mask].repeat(N,1)
-        means = torch.zeros((stds.size(0), 3),device="cuda")
+        means = torch.zeros((stds.size(0), 3),device=self.settings.device)
         samples = torch.normal(mean=means, std=stds)
         rots = build_rotation(self.model._rotation[selected_pts_mask]).repeat(N,1,1)
         new_xyz = torch.bmm(rots, samples.unsqueeze(-1)).squeeze(-1) + self.model.get_xyz[selected_pts_mask].repeat(N, 1)
@@ -178,7 +178,7 @@ class Trainer:
 
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacity, new_scaling, new_rotation)
 
-        prune_filter = torch.cat((selected_pts_mask, torch.zeros(N * selected_pts_mask.sum(), device="cuda", dtype=bool)))
+        prune_filter = torch.cat((selected_pts_mask, torch.zeros(N * selected_pts_mask.sum(), device=self.settings.device, dtype=bool)))
         self.prune_points(prune_filter)
 
     def densify_and_clone(self, grads : torch.Tensor, grad_threshold, scene_extent):
@@ -248,7 +248,7 @@ class Trainer:
                         render_pkg["visibility_filter"], render_pkg["radii"]
 
         # Loss
-        gt_image = viewpoint_cam.original_image.cuda()
+        gt_image = viewpoint_cam.original_image.to(self.settings.device)
         Ll1 = l1_loss(image, gt_image)
         loss = (1.0 - self.settings.lambda_dssim) * Ll1 + \
             self.settings.lambda_dssim * (1.0 - ssim(image, gt_image))

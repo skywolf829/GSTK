@@ -13,6 +13,7 @@ from argparse import ArgumentParser, Namespace
 import sys
 import os
 from typing import Any
+import torch
 
 # Global settings class
 class Settings():
@@ -25,7 +26,8 @@ class Settings():
             "save_path" : None,
             "resolution_scale" : 1.0,
             "white_background" : False,
-            "data_device": "cuda",
+            "device": "cuda" if torch.cuda.is_available() else "cpu",
+            "data_device": "cuda" if torch.cuda.is_available() else "cpu",
 
             # from old OptimizationParams
             "iterations" : 30_000,
