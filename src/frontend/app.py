@@ -8,6 +8,8 @@ from windows.ServerConnectWindow import ServerConnectWindow
 from windows.TestWindow import TestWindow
 from windows.RenderWindow import RenderWindow
 from windows.TrainingSetupWindow import TrainingSetupWindow
+from windows.TrainerWindow import TrainerWindow
+from windows.DebugWindow import DebugWindow
 
 class AppController:
     def __init__(self):
@@ -23,7 +25,7 @@ class AppController:
         # Setup GUI
         dpg.create_context()
         dpg.configure_app(docking=True, docking_space=True, init_file="window_layout.ini", load_init_file=True)
-        dpg.create_viewport(title='GSTK', width=600, height=600)
+        dpg.create_viewport(title='GSTK', width=1200, height=800)
 
         self.menubar_setup()
 
@@ -31,6 +33,8 @@ class AppController:
         self.server_connect_window = ServerConnectWindow(self)
         self.render_window = RenderWindow(self)
         self.training_setup_window = TrainingSetupWindow(self)
+        self.trainer_window = TrainerWindow(self)
+        self.debug_window = DebugWindow(self)
 
 
         self.register_message_listener(self, "other")
@@ -75,6 +79,14 @@ class AppController:
                 dpg.add_menu_item(label="Training setup", 
                     tag="training_setup_window_menu_item", 
                     callback=lambda:TrainingSetupWindow(self),
+                    check=True, default_value=True)
+                dpg.add_menu_item(label="Trainer window", 
+                    tag="trainer_window_menu_item", 
+                    callback=lambda:TrainerWindow(self),
+                    check=True, default_value=True)
+                dpg.add_menu_item(label="Debug window", 
+                    tag="debug_window_menu_item", 
+                    callback=lambda:DebugWindow(self),
                     check=True, default_value=True)
                 dpg.add_menu_item(label="New test window", 
                     callback=lambda: self.create_test_window())
@@ -127,7 +139,6 @@ class AppController:
             else:
                 for window in self.listened_tags[tag]:
                     window.receive_message(data[tag])
-
 
     def popup_box(self, title, message):
         # https://github.com/hoffstadt/DearPyGui/discussions/1002

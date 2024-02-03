@@ -14,10 +14,11 @@ import random
 import json
 from dataset.dataset_readers import sceneLoadTypeCallbacks
 from settings import Settings
+import numpy as np
 from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
 
 class Dataset:
-    def __init__(self, settings : Settings, shuffle=True, resolution_scales=[1.0]):
+    def __init__(self, settings : Settings, shuffle=True, resolution_scales=[1.0], debug=False):
         """b
         :param path: Path to colmap scene main folder.
         """
@@ -26,6 +27,8 @@ class Dataset:
         self.white_background = settings.white_background
         self.train_cameras = {}
         self.test_cameras = {}
+        self.settings = settings
+        self.DEBUG = debug
         
         if os.path.exists(os.path.join(settings.dataset_path, "sparse")):
             scene_info = sceneLoadTypeCallbacks["Colmap"](settings.dataset_path, "images", False)
@@ -65,6 +68,11 @@ class Dataset:
             print("Loading Test Cameras")
             self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, settings)
         self.scene_info = scene_info
+
+        min_pos = self.scene_info.point_cloud.points.min(axis=0)
+        max_pos = self.scene_info.point_cloud.points.max(axis=0)
+        max_diff = np.max(max_pos - min_pos)
+        self.settings.spatial_lr_scale = max_diff.flatten()[0]
         print("Dataset loaded")
 
     def __getitem__(self, idx, scale=1.0):

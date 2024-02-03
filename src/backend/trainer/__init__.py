@@ -12,7 +12,9 @@
 import torch
 from utils.loss_utils import l1_loss, ssim
 import sys
+import numpy as np
 from torch import nn
+import time
 from dataset import Dataset
 from model import GaussianModel
 from utils.general_utils import get_expon_lr_func, inverse_sigmoid, build_rotation
@@ -20,7 +22,7 @@ from settings import Settings
 from tqdm import tqdm
 
 class Trainer:
-    def __init__(self, model : GaussianModel, dataset : Dataset, settings : Settings):
+    def __init__(self, model : GaussianModel, dataset : Dataset, settings : Settings, debug=False):
         self.model : GaussianModel = model
         self.dataset = dataset
         self.settings = settings
@@ -33,6 +35,8 @@ class Trainer:
         self.training = False
         self.loss_values_each_iter = []
         self.step_times_each_iter = []
+
+        self.DEBUG = debug
     
     def training_setup(self):
         self.percent_dense = self.settings.percent_dense
@@ -53,6 +57,7 @@ class Trainer:
                                                     lr_final=self.settings.position_lr_final*self.settings.spatial_lr_scale,
                                                     lr_delay_mult=self.settings.position_lr_delay_mult,
                                                     max_steps=self.settings.position_lr_max_steps)
+        
 
     def update_learning_rate(self, iteration):
         ''' Learning rate scheduling per step '''
@@ -237,7 +242,11 @@ class Trainer:
                 self.reset_opacity()
 
     def step(self):
-        # Events for timing the step
+        if(self.DEBUG):
+            time.sleep(0.01)
+            return torch.rand([100, 100, 3], device=self.settings.device, dtype=torch.float32), \
+                np.random.rand(), np.random.rand()
+        
         # Checks for the optimizer/model to update 
         self.pre_iteration_checks(self._iteration)
 
@@ -273,3 +282,9 @@ class Trainer:
         for iter in t:
             img, loss, ema_loss = self.step()
             t.set_description(f"[{self._iteration+1}/{self.settings.iterations}] loss: {ema_loss:0.04f}")
+    
+    def train_threaded(self, server_controller):
+        while self.training:
+            last_img, last_loss, ema_last_loss = self.step()
+            server_controller.on_train_step(self._iteration, last_img.detach().cpu().numpy(), 
+                                              last_loss, ema_last_loss)

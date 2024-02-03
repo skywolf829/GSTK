@@ -46,6 +46,7 @@ class Settings():
             "densify_from_iter" : 500,
             "densify_until_iter" : 15_000,
             "densify_grad_threshold" : 0.0002,
+            "spatial_lr_scale" : 1.0,
             "random_background" : False
         }
 

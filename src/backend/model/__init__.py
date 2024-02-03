@@ -42,8 +42,9 @@ class GaussianModel:
 
         self.rotation_activation = torch.nn.functional.normalize
 
-    def __init__(self, settings):
+    def __init__(self, settings, debug=False):
         self.settings = settings
+        self.DEBUG = debug
         self.active_sh_degree = 0
         self.max_sh_degree = settings.sh_degree  
         if(settings.white_background):
@@ -64,7 +65,6 @@ class GaussianModel:
         self.denom = torch.empty(0)
         self.optimizer = None
         self.percent_dense = 0
-        self.spatial_lr_scale = 0
         self.setup_functions()
 
     def capture(self):
@@ -80,7 +80,6 @@ class GaussianModel:
             self.xyz_gradient_accum,
             self.denom,
             self.optimizer.state_dict(),
-            self.spatial_lr_scale,
         )
     
     def restore(self, model_args, training_args):
@@ -94,8 +93,7 @@ class GaussianModel:
         self.max_radii2D, 
         xyz_gradient_accum, 
         denom,
-        opt_dict, 
-        self.spatial_lr_scale) = model_args
+        opt_dict) = model_args
         self.training_setup(training_args)
         self.xyz_gradient_accum = xyz_gradient_accum
         self.denom = denom
@@ -132,7 +130,6 @@ class GaussianModel:
             self.active_sh_degree += 1
 
     def create_from_pcd(self, pcd : BasicPointCloud, settings : Settings):
-        self.spatial_lr_scale = settings.spatial_lr_scale
         fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().to(self.settings.device)
         fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().to(self.settings.device))
         features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().to(self.settings.device)

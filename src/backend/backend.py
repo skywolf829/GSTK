@@ -36,6 +36,7 @@ class ServerController:
         self.debug_for_frontend = False
 
         self.loading = False
+        self.DEBUG = False
 
         global server_communicator
         server_communicator = ServerCommunicator(self, ip, port)
@@ -56,12 +57,21 @@ class ServerController:
                                  args=[data['initialize_dataset']])
             self.loading = True
             t.start()
-            #threading.self.initialize_dataset(data['initialize_dataset'])
+            
         if("initialize_trainer" in data.keys()):
-            t :threading.Thread  = threading.Thread(target=self.initialize_model_and_trainer, 
+            t = threading.Thread(target=self.initialize_model_and_trainer, 
                                  args=[data['initialize_trainer']])
             self.loading = True
             t.start()
+
+        if("training_start" in data.keys()):
+            self.on_train_start()
+        
+        if("training_pause" in data.keys()):
+            self.on_train_pause()
+
+        if("debug" in data.keys()):
+            self.on_debug_toggle(data['debug'])
             
     def initialize_dataset(self, data):
         global server_communicator
@@ -105,7 +115,7 @@ class ServerController:
         try:
             data = {"dataset": {"dataset_loading": f""}}
             server_communicator.send_message(data)
-            self.dataset = Dataset(self.settings)
+            self.dataset = Dataset(self.settings, debug=self.DEBUG)
         except Exception as e:
             data = {
                 "dataset": {"dataset_error": f"Dataset failed to initialize, likely doesn't recognize dataset type."}
@@ -166,7 +176,7 @@ class ServerController:
         '''
         
         try:
-            self.model = GaussianModel(self.settings)
+            self.model = GaussianModel(self.settings, debug=self.DEBUG)
         except Exception as e:
             data = {
                 "model": {"model_error": f"Failed to setup GaussianModel"}
@@ -176,7 +186,8 @@ class ServerController:
             return
     
         try:
-            self.trainer = Trainer(self.model, self.dataset, self.settings)
+            self.trainer = Trainer(self.model, self.dataset, self.settings, debug=self.DEBUG)
+            self.trainer.training_setup()
         except Exception as e:
             data = {
                 "trainer": {"trainer_error": f"Failed to setup Trainer"}
@@ -192,8 +203,61 @@ class ServerController:
         print("Initialized model and trainer")
         self.loading = False
 
+    def on_train_start(self):
+        global server_communicator
+        self.loading = True
+        if(self.dataset is None or self.model is None or self.trainer is None):
+            data = {
+                "trainer": {"training_error": f"Cannot begin training until the dataset, model, and trainer are initialized."}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
         
+        t = threading.Thread(target = self.trainer.train_threaded,
+                                args=(self,))
+        self.trainer.training = True
+        t.start()
+        data = {
+            "trainer": {"training_started": True}
+        }
+        server_communicator.send_message(data)
+        self.loading = False
+        
+    def on_train_pause(self):
+        global server_communicator
+        self.loading = True
+        if(self.dataset is None or self.model is None or self.trainer is None):
+            data = {
+                "trainer": {"training_error": f"Cannot begin training until the dataset, model, and trainer are initialized."}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        
+        self.trainer.training = False
+        data = {
+            "trainer": {"training_paused": True}
+        }
+        self.loading = False
 
+    def on_train_step(self, iteration, img, loss, ema_loss):
+        pass
+
+    def on_debug_toggle(self, val):
+        global server_communicator
+        print(f"Setting debug to {val}")
+        self.loading = True
+        self.DEBUG = val
+        if(self.dataset is not None):
+            self.dataset.DEBUG = self.DEBUG
+        if(self.trainer is not None):
+            self.trainer.DEBUG = self.DEBUG
+        if(self.model is not None):
+            self.model.DEBUG = self.DEBUG
+        data = {"debug": {"debug_enabled" if self.DEBUG else "debug_disabled": True}}
+        server_communicator.send_message(data)
+        self.loading = False
 
 class ServerCommunicator(threading.Thread):
 
