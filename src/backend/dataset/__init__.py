@@ -33,6 +33,7 @@ class Dataset:
             print("Found transforms_train.json file, assuming Blender data set!")
             scene_info = sceneLoadTypeCallbacks["Blender"](settings.dataset_path, settings.white_background, False)
         else:
+            print("Could not recognize scene type!")
             assert False, "Could not recognize scene type!"
 
         if not self.loaded_iter:
@@ -46,23 +47,25 @@ class Dataset:
                 camlist.extend(scene_info.train_cameras)
             for id, cam in enumerate(camlist):
                 json_cams.append(camera_to_JSON(id, cam))
-            with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
-                json.dump(json_cams, file)
+            #with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
+            #    json.dump(json_cams, file)
+
 
         if shuffle:
             random.shuffle(scene_info.train_cameras)  # Multi-res consistent random shuffling
             random.shuffle(scene_info.test_cameras)  # Multi-res consistent random shuffling
 
+
         self.cameras_extent = scene_info.nerf_normalization["radius"]
+
 
         for resolution_scale in resolution_scales:
             print("Loading Training Cameras")
             self.train_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.train_cameras, resolution_scale, settings)
             print("Loading Test Cameras")
             self.test_cameras[resolution_scale] = cameraList_from_camInfos(scene_info.test_cameras, resolution_scale, settings)
-
         self.scene_info = scene_info
-
+        print("Dataset loaded")
 
     def __getitem__(self, idx, scale=1.0):
         return self.train_cameras[scale][idx % len(self.train_cameras[scale])]

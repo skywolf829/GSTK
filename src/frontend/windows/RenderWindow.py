@@ -41,7 +41,7 @@ class RenderWindow(Window):
             dpg.add_mouse_release_handler(callback=self.mouse_released)
 
         dpg.bind_item_handler_registry(self.tag, "render_window_resize_handler")
-
+        dpg.set_viewport_resize_callback(self.on_resize)
         #app_controller.update_view_menu(self.tag, True)
     
     def mouse_released(self, sender, app_data):

@@ -7,6 +7,7 @@ from windows.MainWindow import MainWindow
 from windows.ServerConnectWindow import ServerConnectWindow
 from windows.TestWindow import TestWindow
 from windows.RenderWindow import RenderWindow
+from windows.TrainingSetupWindow import TrainingSetupWindow
 
 class AppController:
     def __init__(self):
@@ -29,6 +30,10 @@ class AppController:
         MainWindow()
         self.server_connect_window = ServerConnectWindow(self)
         self.render_window = RenderWindow(self)
+        self.training_setup_window = TrainingSetupWindow(self)
+
+
+        self.register_message_listener(self, "other")
 
         dpg.setup_dearpygui()
         dpg.show_viewport()
@@ -66,6 +71,10 @@ class AppController:
                 dpg.add_menu_item(label="Render view", 
                     tag="render_window_menu_item", 
                     callback=lambda:RenderWindow(self),
+                    check=True, default_value=True)
+                dpg.add_menu_item(label="Training setup", 
+                    tag="training_setup_window_menu_item", 
+                    callback=lambda:TrainingSetupWindow(self),
                     check=True, default_value=True)
                 dpg.add_menu_item(label="New test window", 
                     callback=lambda: self.create_test_window())
@@ -118,6 +127,33 @@ class AppController:
             else:
                 for window in self.listened_tags[tag]:
                     window.receive_message(data[tag])
+
+
+    def popup_box(self, title, message):
+        # https://github.com/hoffstadt/DearPyGui/discussions/1002
+        # guarantee these commands happen in the same frame
+        with dpg.mutex():
+
+            viewport_width = dpg.get_viewport_client_width()
+            viewport_height = dpg.get_viewport_client_height()
+
+            with dpg.window(label=title, modal=True, no_close=True, tag="popup_window") as modal_id:
+                dpg.add_text(message)
+                dpg.add_button(label="Ok", width=75, 
+                               user_data=(modal_id, True), 
+                               callback=lambda:dpg.delete_item("popup_window"))
+                #dpg.add_same_line()
+                #dpg.add_button(label="Cancel", width=75, user_data=(modal_id, False), callback=selection_callback)
+
+        # guarantee these commands happen in another frame
+        dpg.split_frame()
+        width = dpg.get_item_width(modal_id)
+        height = dpg.get_item_height(modal_id)
+        dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
+        
+    def receive_message(self, data):
+        if("error" in data.keys()):
+            self.popup_box("Error", data['error'])
 
 class AppCommunicator(threading.Thread):
     def __init__(self, app_controller : AppController, *args, **kwargs): 
@@ -179,6 +215,9 @@ class AppCommunicator(threading.Thread):
                 self.conn.send(data)
             except Exception as e:
                 print("Could not send data")
+        else:
+            self.app_controller.popup_box("Error", 
+                "Attempted to send message before connecting to server.")
 
 if __name__ == "__main__":
     a = AppController()

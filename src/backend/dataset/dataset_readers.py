@@ -52,7 +52,6 @@ def getNerfppNorm(cam_info):
         return center.flatten(), diagonal
 
     cam_centers = []
-
     for cam in cam_info:
         W2C = getWorld2View2(cam.R, cam.T)
         C2W = np.linalg.inv(W2C)
@@ -223,13 +222,10 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
     train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", white_background, extension)
     print("Reading Test Transforms")
     test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", white_background, extension)
-    
     if not eval:
         train_cam_infos.extend(test_cam_infos)
         test_cam_infos = []
-
     nerf_normalization = getNerfppNorm(train_cam_infos)
-
     ply_path = os.path.join(path, "points3d.ply")
     if not os.path.exists(ply_path):
         # Since this data set has no colmap data, we start with random points
@@ -246,7 +242,6 @@ def readNerfSyntheticInfo(path, white_background, eval, extension=".png"):
         pcd = fetchPly(ply_path)
     except:
         pcd = None
-
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
                            test_cameras=test_cam_infos,

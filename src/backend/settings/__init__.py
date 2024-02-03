@@ -49,6 +49,9 @@ class Settings():
             "random_background" : False
         }
 
+    def keys(self):
+        return self.params.keys()
+    
     def update_argparse(self, parser = None):
         if parser is None:
             parser = ArgumentParser("Gaussian model and training parameters")

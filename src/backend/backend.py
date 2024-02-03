@@ -9,6 +9,7 @@ from settings import Settings
 import threading
 import multiprocessing.connection as connection
 import signal 
+import torch
 
 def signal_handler(sig, frame):
     pid = os.getpid()
@@ -32,12 +33,167 @@ class ServerController:
         self.model = None
         self.trainer = None
 
+        self.debug_for_frontend = False
+
+        self.loading = False
+
         global server_communicator
         server_communicator = ServerCommunicator(self, ip, port)
         server_communicator.start()
         
-    def process_message(data):
-        pass
+    def process_message(self,data):
+        global server_communicator
+        print("Received message")
+        print(data)
+        if(self.loading):
+            data = {"other" : {"error": "Please wait until the current operation is completed"}}
+            server_communicator.send_message(data)
+            return
+        
+        
+        if("initialize_dataset" in data.keys()):
+            t = threading.Thread(target=self.initialize_dataset, 
+                                 args=[data['initialize_dataset']])
+            self.loading = True
+            t.start()
+            #threading.self.initialize_dataset(data['initialize_dataset'])
+        if("initialize_trainer" in data.keys()):
+            t :threading.Thread  = threading.Thread(target=self.initialize_model_and_trainer, 
+                                 args=[data['initialize_trainer']])
+            self.loading = True
+            t.start()
+            
+    def initialize_dataset(self, data):
+        global server_communicator
+
+        # Just load all key data to settings
+        for k in data.keys():
+            # Check if the keys line up
+            if k not in self.settings.keys():
+                data = {
+                    "dataset": {"dataset_error": f"Key {k} from client not present in Settings"}
+                }
+                server_communicator.send_message(data)
+                self.loading = False
+                return
+            else:
+                self.settings.params[k] = data[k]
+        
+
+        # Check to make sure dataset path exists
+        if not (os.path.exists(data["dataset_path"])):
+            data = {
+                "dataset": {"dataset_error": f"Dataset path does not exist: {data['dataset_path']}"}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        
+        # Check if the data device exists
+        try:
+            a = torch.empty([32], dtype=torch.float32, device=data['data_device'])
+            del a
+        except Exception as e:
+            data = {
+                "dataset": {"dataset_error": f"Dataset device does not exist: {data['data_device']}"}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        
+        # Create dataset
+        try:
+            data = {"dataset": {"dataset_loading": f""}}
+            server_communicator.send_message(data)
+            self.dataset = Dataset(self.settings)
+        except Exception as e:
+            data = {
+                "dataset": {"dataset_error": f"Dataset failed to initialize, likely doesn't recognize dataset type."}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        
+        data = {
+            "dataset": {"dataset_initialized": f"Dataset was initialized."}
+        }
+        server_communicator.send_message(data)
+        self.loading = False
+        
+    def initialize_model_and_trainer(self, data):
+        global server_communicator
+
+        if(self.dataset is None):
+            data = {
+                "trainer": {"trainer_error": f"Must initialize dataset before the model"}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        
+        # Just load all key data to settings
+        for k in data.keys():
+            # Check if the keys line up
+            if k not in self.settings.keys():
+                data = {
+                    "trainer": {"trainer_error": f"Key {k} from client not present in Settings"}
+                }
+                server_communicator.send_message(data)
+                self.loading = False
+                return
+            else:
+                self.settings.params[k] = data[k]
+        
+        # Check if the data device exists
+        try:
+            a = torch.empty([32], dtype=torch.float32, device=data['device'])
+            del a
+        except Exception as e:
+            data = {
+                "model": {"model_error": f"Dataset device does not exist: {data['device']}"}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        '''
+        if("cuda" not in data['device']):
+            data = {
+                "model": {"model_error": f"Backend requires cuda device (eg. 'cuda', 'cuda:3')"}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        '''
+        
+        try:
+            self.model = GaussianModel(self.settings)
+        except Exception as e:
+            data = {
+                "model": {"model_error": f"Failed to setup GaussianModel"}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+    
+        try:
+            self.trainer = Trainer(self.model, self.dataset, self.settings)
+        except Exception as e:
+            data = {
+                "trainer": {"trainer_error": f"Failed to setup Trainer"}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        
+        data = {
+            "model": {"model_initialized": f"Model was initialized"}
+        }
+        server_communicator.send_message(data)
+        print("Initialized model and trainer")
+        self.loading = False
+
+        
+
 
 class ServerCommunicator(threading.Thread):
 
@@ -70,8 +226,7 @@ class ServerCommunicator(threading.Thread):
                 # blocking call, see check_for_msg
                 data = self.check_for_msg()
                 if data is not None:
-                    # process data from GUI
-                    pass
+                    self.server_controller.process_message(data)
 
         print("Stop signal detected")
         # clean up
@@ -100,7 +255,7 @@ class ServerCommunicator(threading.Thread):
             item = None
         return item
 
-    def send_msg(self, data):
+    def send_message(self, data):
         if(self.state == "connected"):
             try:
                 self.conn.send(data)
