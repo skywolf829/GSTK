@@ -7,6 +7,7 @@ import uuid
 from windows.MainWindow import MainWindow
 from windows.ServerConnectWindow import ServerConnectWindow
 from windows.TestWindow import TestWindow
+from windows.TrainSetupWindow import TrainSetupWindow
 
 class AppController:
     def __init__(self):
@@ -21,7 +22,7 @@ class AppController:
 
         MainWindow()
         self.server_connect_window = ServerConnectWindow(self)
-
+        TrainSetupWindow('Training Setup Window')
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window("main_window", True)
