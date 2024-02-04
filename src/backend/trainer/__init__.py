@@ -243,7 +243,8 @@ class Trainer:
 
     def step(self):
         if(self.DEBUG):
-            time.sleep(0.01)
+            #time.sleep(0.001)
+            self._iteration += 1
             return torch.rand([100, 100, 3], device=self.settings.device, dtype=torch.float32), \
                 np.random.rand(), np.random.rand()
         
@@ -275,7 +276,7 @@ class Trainer:
         self.loss_values_each_iter.append(loss.item())
 
         self._iteration += 1
-        return image, loss.item(), self.ema_loss
+        return self._iteration, image, loss.item(), self.ema_loss
     
     def train_all(self):
         t = tqdm(range(self._iteration, self.settings.iterations))
@@ -286,5 +287,6 @@ class Trainer:
     def train_threaded(self, server_controller):
         while self.training:
             last_img, last_loss, ema_last_loss = self.step()
-            server_controller.on_train_step(self._iteration, last_img.detach().cpu().numpy(), 
-                                              last_loss, ema_last_loss)
+            server_controller.on_train_step(self._iteration, 
+                                            last_img.detach().cpu().numpy(), 
+                                            last_loss, ema_last_loss)

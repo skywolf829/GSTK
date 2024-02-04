@@ -239,10 +239,20 @@ class ServerController:
         data = {
             "trainer": {"training_paused": True}
         }
+        server_communicator.send_message(data)
         self.loading = False
 
     def on_train_step(self, iteration, img, loss, ema_loss):
-        pass
+        global server_communicator
+        
+        data = {"trainer": {"step": {
+            "iteration": iteration,
+            "max_iteration": self.settings.iterations,
+            "loss": loss,
+            "ema_loss": ema_loss
+            }}
+        }
+        server_communicator.send_message(data)
 
     def on_debug_toggle(self, val):
         global server_communicator
@@ -322,6 +332,7 @@ class ServerCommunicator(threading.Thread):
     def send_message(self, data):
         if(self.state == "connected"):
             try:
+                #print(f"Sending {data}")
                 self.conn.send(data)
             except Exception:
                 print("Failed to send data.")

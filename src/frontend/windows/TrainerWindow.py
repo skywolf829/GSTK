@@ -10,6 +10,8 @@ class TrainerWindow(Window):
             print(f"{self.tag} window already exists! Cannot add another.")
             return
         with dpg.window(label="Trainer window", tag=self.tag):
+            self.iteration_text = dpg.add_text("", tag="iteration_text")
+            self.loss_text = dpg.add_text("", tag="loss_test")
             self.button = dpg.add_button(label="Start training",
                         callback=self.button_pressed)
         self.training = False
@@ -37,10 +39,15 @@ class TrainerWindow(Window):
         self.app_controller.popup_box("Error", data)
         pass
     
+    def on_step(self, data):
+        dpg.set_value(self.iteration_text, f"{data['iteration']}/{data['max_iteration']}")
+
     def receive_message(self, data):
         if "training_started" in data.keys():
-            self.on_train_true(data['training_started'])
+            self.on_train_true()
         if "training_paused" in data.keys():
-            self.on_train_false(data['training_paused'])
+            self.on_train_false()
         if "training_error" in data.keys():
             self.on_train_error(data['training_error'])
+        if "step" in data.keys():
+            self.on_step(data['step'])
