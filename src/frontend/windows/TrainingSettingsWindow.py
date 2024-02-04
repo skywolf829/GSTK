@@ -1,56 +1,14 @@
 import dearpygui.dearpygui as dpg
 from windows import Window
 
-class TrainingSetupWindow(Window):
+class TrainingSettingsWindow(Window):
     def __init__(self, app_controller):
-        self.tag = "training_setup_window"
-        self.app_controller = app_controller
-        self.app_controller.register_message_listener(self, "dataset")
+        super().__init__("trainer_settings_window", app_controller)
+
         self.app_controller.register_message_listener(self, "trainer")
-        self.app_controller.register_message_listener(self, "model")
-        if(dpg.does_item_exist(self.tag)):
-            print(f"{self.tag} window already exists! Cannot add another.")
-            return
-        with dpg.window(label="Training Setup", tag=self.tag):
-            
-            # Dataset entries
-            dpg.add_text("Dataset settings")
-            dpg.add_input_text(label="Dataset Path", 
-                               tag="dataset_path", 
-                               default_value="../../data/mic")
-            with dpg.group(horizontal=True):
-                dpg.add_radio_button(["1", "2", "4", "8", "-1"],
-                            default_value="1", 
-                            label="Resolution scale", tag='resolution_scale',
-                            horizontal=True)
-                dpg.add_text("Resolution scale")
-            dpg.add_input_text(label="Data device", 
-                            hint="Where to host dataset (e.g. cpu, cuda)",
-                            tag="data_device", 
-                            default_value="cuda")
-            dpg.add_checkbox(label="White background",
-                            tag="white_background",
-                            default_value=False)
-            with dpg.group(horizontal=True):
-                dpg.add_button(label="Initialize dataset",
-                            callback=self.initialize_dataset_pressed)
-                self.dataset_status = dpg.add_text("", tag="dataset_status")
-            dpg.add_spacer()
-
-            # Model entries
-            dpg.add_text("Model settings")
-            dpg.add_slider_int(label="SH degree",
-                               tag="sh_degree",
-                               default_value=3,
-                               min_value=0,
-                               max_value=3)
-            dpg.add_input_text(label="Device", 
-                               hint="Where to host model (e.g. cuda, cuda:3)",
-                               tag="device", 
-                               default_value="cuda")
-            
-            dpg.add_spacer()
-
+        
+        with dpg.window(label="Training settings", tag=self.tag, on_close=self.on_close):
+        
             # Trainer settings
             dpg.add_text("Training settings")
             dpg.add_slider_int(label="Total iterations", 
@@ -159,27 +117,15 @@ class TrainingSetupWindow(Window):
                                max_value=0.01,
                                format= '%.6f'
                                )
-            with dpg.group(horizontal=True):
-                dpg.add_button(label="Initialize model and trainer",
-                            callback=self.initialize_model_and_trainer_pressed)            
-                self.trainer_status = dpg.add_text("", tag="trainer_status")
+            
+            dpg.add_button(label="Update trainer settings",
+                        callback=self.update_trainer_settings)    
 
-    def initialize_dataset_pressed(self):
-        dpg.set_value(self.dataset_status, "")
-        dataset_data = {
-            "dataset_path" : dpg.get_value("dataset_path"),
-            "resolution_scale" : int(dpg.get_value("resolution_scale")),
-            "white_background" : dpg.get_value("white_background"),
-            "data_device": dpg.get_value("data_device")
-        }
-        data_to_send = {
-            "initialize_dataset" : dataset_data
-        }
-        self.app_controller.app_communicator.send_message(data_to_send)
+        
 
-    def initialize_model_and_trainer_pressed(self):
-        dpg.set_value(self.trainer_status, "")
-        model_and_trainer_data = {
+    def update_trainer_settings(self):
+        
+        trainer_settings = {
             "iterations" : dpg.get_value("iterations"),
             "position_lr_init" : dpg.get_value("position_lr_init"),
             "position_lr_final" : dpg.get_value("position_lr_final"),
@@ -195,45 +141,25 @@ class TrainingSetupWindow(Window):
             "opacity_reset_interval" : dpg.get_value("opacity_reset_interval"),
             "densify_from_iter" : dpg.get_value("densify_from_iter"),
             "densify_until_iter" : dpg.get_value("densify_until_iter"),
-            "densify_grad_threshold" : dpg.get_value("densify_grad_threshold"),
-            "sh_degree" : dpg.get_value("sh_degree"),
-            "device": dpg.get_value("device")
+            "densify_grad_threshold" : dpg.get_value("densify_grad_threshold")
         }
         data_to_send = {
-            "initialize_trainer" : model_and_trainer_data
+            "update_trainer_settings" : trainer_settings
         }
         self.app_controller.app_communicator.send_message(data_to_send)
 
-    def on_dataset_initialized(self, data):
-        dpg.set_value(self.dataset_status, "Dataset loaded.")
-    
-    def on_dataset_loading(self, data):
-        dpg.set_value(self.dataset_status, "Dataset loading...")
+    def on_update(self, data):
+        self.app_controller.popup_box("Updated trainer settings", data)
 
-    def on_dataset_error(self, data):
-        dpg.set_value(self.dataset_status, "")
-        self.app_controller.popup_box("Dataset initialization error", data)
+    def on_update_error(self, data):
+        self.app_controller.popup_box("Error updating trainer settings", data)
 
-    def on_model_initialized(self, data):
-        dpg.set_value(self.trainer_status, "Trainer and model initialized")
-
-    def on_model_error(self, data):
-        self.app_controller.popup_box("Model initialization error", data)
+    def on_receive_state(self, data):
+        for k in data.keys():
+            dpg.set_value(k, data[k])
 
     def receive_message(self, data):
-        if "dataset_initialized" in data.keys():
-            self.on_dataset_initialized(data['dataset_initialized'])
-        if "dataset_loading" in data.keys():
-            self.on_dataset_loading(data['dataset_loading'])
-        if "dataset_error" in data.keys():
-            self.on_dataset_error(data['dataset_error'])
-
-        if "trainer_initialized" in data.keys():
-            self.on_model_initialized(data['trainer_initialized'])
-        if "trainer_error" in data.keys():
-            self.on_model_error(data['trainer_error'])
-
-        if "model_initialized" in data.keys():
-            self.on_model_initialized(data['model_initialized'])
-        if "model_error" in data.keys():
-            self.on_model_error(data['model_error'])
+        if "trainer_settings_updated" in data.keys():
+            self.on_update(data['trainer_settings_updated'])
+        if "trainer_settings_updated_error" in data.keys():
+            self.on_update_error(data['trainer_settings_updated_error'])

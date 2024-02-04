@@ -22,8 +22,8 @@ class Settings():
             
             # from old ModelParams 
             "sh_degree" : 3,
-            "dataset_path" : None,
-            "save_path" : None,
+            "dataset_path" : "",
+            "save_path" : "",
             "resolution_scale" : 1.0,
             "white_background" : False,
             "device": "cuda" if torch.cuda.is_available() else "cpu",

@@ -22,9 +22,8 @@ from settings import Settings
 from tqdm import tqdm
 
 class Trainer:
-    def __init__(self, model : GaussianModel, dataset : Dataset, settings : Settings, debug=False):
+    def __init__(self, model : GaussianModel, settings : Settings, debug=False):
         self.model : GaussianModel = model
-        self.dataset = dataset
         self.settings = settings
 
         self.optimizer = None
@@ -32,12 +31,27 @@ class Trainer:
 
         self._iteration = 0
         self.ema_loss = 0.0
+        self.last_loss = 0.0
         self.training = False
         self.loss_values_each_iter = []
         self.step_times_each_iter = []
 
         self.DEBUG = debug
     
+    def set_dataset(self, dataset : Dataset):
+        self.dataset = dataset
+    
+    def set_model(self, model : GaussianModel):
+        self.model = model
+    
+    def update_settings(self, new_settings: Settings):
+        
+        # TODO
+        # might want to check if device changed, and move everything to new device
+        self.settings = new_settings
+        # TODO
+        # update learning rates and all the other settings in the setup.
+
     def training_setup(self):
         self.percent_dense = self.settings.percent_dense
         self.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
@@ -244,9 +258,11 @@ class Trainer:
     def step(self):
         if(self.DEBUG):
             #time.sleep(0.001)
+            self.last_loss = np.random.rand()
+            self.ema_loss = self.ema_loss * 0.6 + self.last_loss * 0.4
             self._iteration += 1
-            return torch.rand([100, 100, 3], device=self.settings.device, dtype=torch.float32), \
-                np.random.rand(), np.random.rand()
+            return torch.rand([1024, 1024, 3], device=self.settings.device, dtype=torch.float32), \
+                self.last_loss, self.ema_loss
         
         # Checks for the optimizer/model to update 
         self.pre_iteration_checks(self._iteration)
@@ -276,7 +292,8 @@ class Trainer:
         self.loss_values_each_iter.append(loss.item())
 
         self._iteration += 1
-        return self._iteration, image, loss.item(), self.ema_loss
+        self.last_loss = loss.item()
+        return self._iteration, image, self.last_loss, self.ema_loss
     
     def train_all(self):
         t = tqdm(range(self._iteration, self.settings.iterations))

@@ -3,13 +3,10 @@ from windows import Window
 
 class ServerConnectWindow(Window):
     def __init__(self, app_controller):
-        self.app_controller = app_controller
-        self.button = None
-        self.tag = "server_connector"
-        if(dpg.does_item_exist(self.tag)):
-            self.on_close()
-            del self
-            return
+        super().__init__("server_connect_window", app_controller)
+        
+        self.app_controller.register_message_listener(self, "connection")
+        
         with dpg.window(label="Server", 
                         tag=self.tag, on_close=self.on_close,
                         width=450, height=150):
@@ -19,20 +16,13 @@ class ServerConnectWindow(Window):
                 self.button = dpg.add_button(label="Connect", callback=self.connect_button_clicked)
                 self.status = dpg.add_text("", tag="connection_status")
 
-        #app_controller.update_view_menu(self.tag, True)
+        
 
     def set_button_label(self, s : str):
         dpg.set_item_label(self.button, s)
-    
-    def set_enabled(self, v : bool):
-        dpg.configure_item(self.button, enabled=v)
 
     def set_status_text(self, s: str):
         dpg.set_value(self.status, s)
-    
-    def on_close(self):
-        self.app_controller.update_view_menu(self.tag, False)
-        dpg.delete_item(self.tag)
     
     def connect_button_clicked(self):
         ip = str(dpg.get_value("server_ip"))
@@ -42,3 +32,13 @@ class ServerConnectWindow(Window):
         except Exception as e:
             print(f"Port must be integer, you entered {dpg.get_value('server_port')}")
             raise e
+        
+    def receive_message(self, data: dict):
+        if("connected" in data.keys()):            
+            self.set_button_label("Disconnect")
+            self.set_status_text("Connected!")
+            self.app_controller.popup_box("Success", "Successfully connected to server. Loaded server's state variables.")
+        if("disconnected" in data.keys()):
+            self.set_button_label("Connect")
+            self.set_status_text("")
+            self.app_controller.popup_box("Success", "Successfully disconnected from server.")

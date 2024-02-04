@@ -29,6 +29,8 @@ class Dataset:
         self.test_cameras = {}
         self.settings = settings
         self.DEBUG = debug
+        if(self.DEBUG):
+            return
         
         if os.path.exists(os.path.join(settings.dataset_path, "sparse")):
             scene_info = sceneLoadTypeCallbacks["Colmap"](settings.dataset_path, "images", False)

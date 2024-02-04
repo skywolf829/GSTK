@@ -4,12 +4,8 @@ import numpy as np
 
 class RenderWindow(Window):
     def __init__(self, app_controller):
-        self.app_controller = app_controller
-        self.tag = "render_window"
-        if(dpg.does_item_exist(self.tag)):
-            self.on_close()
-            del self
-            return
+        super().__init__("render_window", app_controller)
+
         default_width = 400
         default_height = 400
         self.max_tex_width = 2000
@@ -42,7 +38,7 @@ class RenderWindow(Window):
 
         dpg.bind_item_handler_registry(self.tag, "render_window_resize_handler")
         dpg.set_viewport_resize_callback(self.on_resize)
-        #app_controller.update_view_menu(self.tag, True)
+        
     
     def mouse_released(self, sender, app_data):
         if(self.resizing):
@@ -66,6 +62,7 @@ class RenderWindow(Window):
             self.app_controller.app_communicator.send_message(data)
             '''
             self.resizing = False
+            
 
     def update_dynamic_texture(self, data):
         print("Updating texture")

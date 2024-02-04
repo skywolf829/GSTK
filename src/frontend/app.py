@@ -5,9 +5,10 @@ import threading
 
 from windows.MainWindow import MainWindow
 from windows.ServerConnectWindow import ServerConnectWindow
-from windows.TestWindow import TestWindow
+from windows.DatasetSetupWindow import DatasetSetupWindow
 from windows.RenderWindow import RenderWindow
-from windows.TrainingSetupWindow import TrainingSetupWindow
+from windows.TrainingSettingsWindow import TrainingSettingsWindow
+from windows.ModelSettingsWindow import ModelSettingsWindow
 from windows.TrainerWindow import TrainerWindow
 from windows.DebugWindow import DebugWindow
 
@@ -29,11 +30,13 @@ class AppController:
 
         self.menubar_setup()
 
-        MainWindow()
+        self.main_window = MainWindow(self)
         self.server_connect_window = ServerConnectWindow(self)
         self.render_window = RenderWindow(self)
-        self.training_setup_window = TrainingSetupWindow(self)
+        self.training_settings_window = TrainingSettingsWindow(self)
+        self.model_settings_window = ModelSettingsWindow(self)
         self.trainer_window = TrainerWindow(self)
+        self.dataset_window = DatasetSetupWindow(self)
         self.debug_window = DebugWindow(self)
 
 
@@ -69,27 +72,33 @@ class AppController:
                 
             with dpg.menu(label="View"):
                 dpg.add_menu_item(label="Server connection", 
-                    tag="server_connector_menu_item", 
-                    callback=lambda:ServerConnectWindow(self),
-                    check=True, default_value=True)
+                    tag="server_connect_window_menu_item", 
+                    callback=lambda:self.menu_button_click(ServerConnectWindow, "server_connect_window"),
+                    check=True)
                 dpg.add_menu_item(label="Render view", 
                     tag="render_window_menu_item", 
-                    callback=lambda:RenderWindow(self),
-                    check=True, default_value=True)
-                dpg.add_menu_item(label="Training setup", 
-                    tag="training_setup_window_menu_item", 
-                    callback=lambda:TrainingSetupWindow(self),
-                    check=True, default_value=True)
+                    callback=lambda:self.menu_button_click(RenderWindow, "render_window"),
+                    check=True)
+                dpg.add_menu_item(label="Dataset setup", 
+                    tag="dataset_setup_window_menu_item", 
+                    callback=lambda:self.menu_button_click(DatasetSetupWindow, "dataset_setup_window"),
+                    check=True)
+                dpg.add_menu_item(label="Training settings", 
+                    tag="trainer_settings_window_menu_item", 
+                    callback=lambda:self.menu_button_click(TrainingSettingsWindow, "training_settings_window"),
+                    check=True)
+                dpg.add_menu_item(label="Model settings", 
+                    tag="model_settings_window_menu_item", 
+                    callback=lambda:self.menu_button_click(ModelSettingsWindow, "model_settings_window"),
+                    check=True)
                 dpg.add_menu_item(label="Trainer window", 
                     tag="trainer_window_menu_item", 
-                    callback=lambda:TrainerWindow(self),
-                    check=True, default_value=True)
+                    callback=lambda:self.menu_button_click(TrainerWindow, "trainer_window"),
+                    check=True)
                 dpg.add_menu_item(label="Debug window", 
                     tag="debug_window_menu_item", 
-                    callback=lambda:DebugWindow(self),
-                    check=True, default_value=True)
-                dpg.add_menu_item(label="New test window", 
-                    callback=lambda: self.create_test_window())
+                    callback=lambda:self.menu_button_click(DebugWindow, "debug_window"),
+                    check=True)
 
     # Properly closes down the connection and threaded communicator
     def on_app_close(self):
@@ -101,10 +110,12 @@ class AppController:
         except Exception:
             pass
     
-    # Creates a test window with a random name
-    def create_test_window(self):
-        TestWindow(str(uuid.uuid1()))
-
+    def menu_button_click(self, window, tag):
+        if(dpg.does_item_exist(tag)):
+            dpg.configure_item(tag, show=not dpg.is_item_shown(tag))
+        else:
+            window(self)
+        
     '''
     Enables or disables the checkmark next to the window on the view menu
     '''
@@ -116,18 +127,6 @@ class AppController:
         else:
             print(f"{tag}_menu_item does not exist.")
 
-    '''
-    Changes the server connection window text based on the current connection status
-    '''
-    def update_connection(self, connected : bool):
-        if(connected):
-            
-            self.server_connect_window.set_button_label("Disconnect")
-            self.server_connect_window.set_status_text("Connected!")
-        else:
-            self.server_connect_window.set_button_label("Connect")
-            self.server_connect_window.set_status_text("")
-    
     '''
     Takes new message data (in JSON/dict format) and distributes
     it to the registered listeners
@@ -163,8 +162,19 @@ class AppController:
         dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
         
     def receive_message(self, data):
+        # Handles all "other" messages, usually global or state-related
+        
         if("error" in data.keys()):
             self.popup_box("Error", data['error'])
+        if("settings_state" in data.keys()):
+            for k in data['settings_state'].keys():
+                if(dpg.does_item_exist(k)):
+                    dpg.set_value(k, data['settings_state'][k])
+        if("debug" in data.keys()):
+            self.debug_window.update_debug_val(data['debug'])
+        if('dataset_loaded' in data.keys()):
+            self.dataset_window.update_dataset_loaded_val(data['dataset_loaded'])
+
 
 class AppCommunicator(threading.Thread):
     def __init__(self, app_controller : AppController, *args, **kwargs): 
@@ -191,11 +201,12 @@ class AppCommunicator(threading.Thread):
             self.conn = connection.Client((ip, port), authkey=b"GRAVITY")
             print(f"Successfully connected to {ip}:{port}")
             self.connected = True
+            self.app_controller.distribute_message_data(
+                {"connection": {"connected": True}}
+            )
         except:
             print(f"WARNING: {ip}:{port} is not available.")
             self.connected = False
-
-        self.app_controller.update_connection(self.connected)
     
     # Runs infinitely to listen for messages (until close)
     def run(self):
@@ -212,13 +223,16 @@ class AppCommunicator(threading.Thread):
         self.stop()
 
     # Disconnects and updates the app controller
-    def disconnect_from_server(self):        
+    def disconnect_from_server(self, popup=True):        
         if(self.conn is not None):
             print(f"Disconnecting")
             self.conn.close()
             self.conn = None
             self.connected = False
-            self.app_controller.update_connection(self.connected)
+            if(popup):
+                self.app_controller.distribute_message_data(
+                        {"connection": {"disconnected": True}}
+                )
 
     def send_message(self, data):
         if(self.conn is not None and self.connected):
@@ -226,6 +240,8 @@ class AppCommunicator(threading.Thread):
                 self.conn.send(data)
             except Exception as e:
                 print("Could not send data")
+                self.disconnect_from_server(popup=False)
+                self.app_controller.popup_box("Error", "Server disconnected.")
         else:
             self.app_controller.popup_box("Error", 
                 "Attempted to send message before connecting to server.")

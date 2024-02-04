@@ -15,7 +15,10 @@ import numpy as np
 from utils.graphics_utils import getWorld2View2, getProjectionMatrix
 
 class Camera(nn.Module):
-    def __init__(self, colmap_id, R, T, FoVx, FoVy, image, gt_alpha_mask,
+    def __init__(self, colmap_id, 
+                 R, T, 
+                 FoVx, FoVy, 
+                 image, gt_alpha_mask,
                  image_name, uid,
                  trans=np.array([0.0, 0.0, 0.0]), scale=1.0, data_device = "cuda"
                  ):
@@ -58,7 +61,11 @@ class Camera(nn.Module):
         self.camera_center = self.world_view_transform.inverse()[3, :3]
 
 class MiniCam:
-    def __init__(self, width, height, fovy, fovx, znear, zfar, world_view_transform, full_proj_transform):
+    def __init__(self, 
+                 width, height, 
+                 fovy, fovx, 
+                 znear, zfar,
+                 world_view_transform, full_proj_transform):
         self.image_width = width
         self.image_height = height    
         self.FoVy = fovy
@@ -70,3 +77,37 @@ class MiniCam:
         view_inv = torch.inverse(self.world_view_transform)
         self.camera_center = view_inv[3][:3]
 
+class RenderCam:
+    def __init__(self, 
+                 width=800, height=800, 
+                 fovy=65., fovx=65., 
+                 znear=0.01, zfar=100.0,
+                 T=torch.tensor([0.,0.,0.], dtype=torch.float32, device="cuda" if torch.cuda.is_available() else "cpu"),
+                 R=torch.eye(3, dtype=torch.float32, device="cuda" if torch.cuda.is_available() else "cpu"),
+                 device="cuda" if torch.cuda.is_available() else "cpu"):
+        self.data_device = device
+        self.image_width = width
+        self.image_height = height    
+        self.FoVy = fovy
+        self.FoVx = fovx
+        self.znear = znear
+        self.zfar = zfar
+        self.T = T
+        self.R = R
+
+    @property
+    def world_view_transform(self):
+        return torch.tensor(getWorld2View2(self.R, self.T), 
+                            device=self.data_device).transpose(0, 1)
+    
+    @property
+    def full_proj_transform(self):
+        getProjectionMatrix(znear=self.znear, 
+                            zfar=self.zfar, 
+                            fovX=self.FoVx, 
+                            fovY=self.FoVy,
+                            device=self.data_device).transpose(0,1).to(self.data_device)
+    
+    @property
+    def camera_center(self):
+        return self.T

@@ -46,10 +46,10 @@ class GaussianModel:
         self.settings = settings
         self.DEBUG = debug
         self.active_sh_degree = 0
-        self.max_sh_degree = settings.sh_degree  
-        if(settings.white_background):
+        self.max_sh_degree = self.settings.sh_degree  
+        if(self.settings.white_background):
             bg = torch.tensor([1.,1.,1.], device=self.settings.device)
-        elif(not settings.random_background):
+        elif(not self.settings.random_background):
             bg = torch.tensor([0.,0.,0.], device=self.settings.device)
         else:
             bg = None
@@ -66,6 +66,17 @@ class GaussianModel:
         self.optimizer = None
         self.percent_dense = 0
         self.setup_functions()
+
+    def on_settings_update(self, new_settings):
+        self.settings = new_settings
+        self.max_sh_degree = self.settings.sh_degree  
+        if(self.settings.white_background):
+            bg = torch.tensor([1.,1.,1.], device=self.settings.device)
+        elif(not self.settings.random_background):
+            bg = torch.tensor([0.,0.,0.], device=self.settings.device)
+        else:
+            bg = None
+        self.background = bg
 
     def capture(self):
         return (

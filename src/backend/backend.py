@@ -10,6 +10,7 @@ import threading
 import multiprocessing.connection as connection
 import signal 
 import torch
+from dataset.cameras import RenderCam
 
 def signal_handler(sig, frame):
     pid = os.getpid()
@@ -26,14 +27,15 @@ signal.signal(signal.SIGINT, signal_handler)
 class ServerController:
     def __init__(self, ip, port):
         # Create the settings
+        self.DEBUG = False
         self.ip = ip
         self.port = port
-        self.settings = Settings()
-        self.dataset = None
-        self.model = None
-        self.trainer = None
 
-        self.debug_for_frontend = False
+        self.settings = Settings()
+        self.model = GaussianModel(self.settings, debug=self.DEBUG)
+        self.trainer = Trainer(self.model, self.settings, debug=self.DEBUG)
+        self.dataset = None
+        self.render_cam = RenderCam()
 
         self.loading = False
         self.DEBUG = False
@@ -58,10 +60,16 @@ class ServerController:
             self.loading = True
             t.start()
             
-        if("initialize_trainer" in data.keys()):
-            t = threading.Thread(target=self.initialize_model_and_trainer, 
-                                 args=[data['initialize_trainer']])
-            self.loading = True
+        if("update_trainer_settings" in data.keys()):
+            t = threading.Thread(target=self.update_trainer_settings, 
+                                 args=[data['update_trainer_settings']])
+            self.loading = True            
+            t.start()
+        
+        if("update_model_settings" in data.keys()):
+            t = threading.Thread(target=self.update_model_settings, 
+                                 args=[data['update_model_settings']])
+            self.loading = True            
             t.start()
 
         if("training_start" in data.keys()):
@@ -91,7 +99,7 @@ class ServerController:
         
 
         # Check to make sure dataset path exists
-        if not (os.path.exists(data["dataset_path"])):
+        if not os.path.exists(data["dataset_path"]) and not self.DEBUG:
             data = {
                 "dataset": {"dataset_error": f"Dataset path does not exist: {data['dataset_path']}"}
             }
@@ -130,77 +138,75 @@ class ServerController:
         server_communicator.send_message(data)
         self.loading = False
         
-    def initialize_model_and_trainer(self, data):
+    def update_trainer_settings(self, data):
         global server_communicator
 
-        if(self.dataset is None):
-            data = {
-                "trainer": {"trainer_error": f"Must initialize dataset before the model"}
-            }
-            server_communicator.send_message(data)
-            self.loading = False
-            return
-        
         # Just load all key data to settings
         for k in data.keys():
             # Check if the keys line up
             if k not in self.settings.keys():
                 data = {
-                    "trainer": {"trainer_error": f"Key {k} from client not present in Settings"}
+                    "trainer": {"trainer_settings_updated_error": f"Key {k} from client not present in Settings"}
                 }
                 server_communicator.send_message(data)
                 self.loading = False
                 return
-            else:
-                self.settings.params[k] = data[k]
-        
-        # Check if the data device exists
+            
+        # Check all before commiting changed
+        for k in data.keys():
+            self.settings.params[k] = data[k]
+            
         try:
-            a = torch.empty([32], dtype=torch.float32, device=data['device'])
-            del a
-        except Exception as e:
-            data = {
-                "model": {"model_error": f"Dataset device does not exist: {data['device']}"}
-            }
-            server_communicator.send_message(data)
-            self.loading = False
-            return
-        '''
-        if("cuda" not in data['device']):
-            data = {
-                "model": {"model_error": f"Backend requires cuda device (eg. 'cuda', 'cuda:3')"}
-            }
-            server_communicator.send_message(data)
-            self.loading = False
-            return
-        '''
-        
-        try:
-            self.model = GaussianModel(self.settings, debug=self.DEBUG)
-        except Exception as e:
-            data = {
-                "model": {"model_error": f"Failed to setup GaussianModel"}
-            }
-            server_communicator.send_message(data)
-            self.loading = False
-            return
-    
-        try:
-            self.trainer = Trainer(self.model, self.dataset, self.settings, debug=self.DEBUG)
+            self.trainer.update_settings(self.settings)
             self.trainer.training_setup()
         except Exception as e:
             data = {
-                "trainer": {"trainer_error": f"Failed to setup Trainer"}
+                "trainer": {"trainer_settings_updated_error": f"Failed to update trainer settings."}
             }
             server_communicator.send_message(data)
             self.loading = False
             return
         
         data = {
-            "model": {"model_initialized": f"Model was initialized"}
+            "trainer": {"trainer_settings_updated": f"Trainer settings successfully updated."}
         }
         server_communicator.send_message(data)
         print("Initialized model and trainer")
+        self.loading = False
+
+    def update_model_settings(self, data):
+        global server_communicator
+
+        self.loading = True
+        # Check if the data device exists
+        try:
+            a = torch.empty([32], dtype=torch.float32, device=data['device'])
+            del a
+        except Exception as e:
+            data = {
+                "model": {"model_settings_updated_error": f"Device does not exist: {data['device']}"}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        
+        if(data['sh_degree'] < 0 or data['sh_degree'] > 3):
+            data = {
+                "model": {"model_settings_updated_error": f"SH degree is invalid: {data['device']}"}
+            }
+            server_communicator.send_message(data)
+            self.loading = False
+            return
+        
+        self.settings.params['sh_degree'] = data['sh_degree']
+        self.settings.params['device'] = data['device']
+        self.model.on_settings_update(self.settings)
+        
+        data = {
+            "model": {"model_settings_updated": f"Model settings were updated"}
+        }
+        server_communicator.send_message(data)
+        print("Updated model settings")
         self.loading = False
 
     def on_train_start(self):
@@ -244,15 +250,15 @@ class ServerController:
 
     def on_train_step(self, iteration, img, loss, ema_loss):
         global server_communicator
-        
-        data = {"trainer": {"step": {
-            "iteration": iteration,
-            "max_iteration": self.settings.iterations,
-            "loss": loss,
-            "ema_loss": ema_loss
-            }}
-        }
-        server_communicator.send_message(data)
+        if (iteration % 25 == 0):
+            data = {"trainer": {"step": {
+                "iteration": iteration,
+                "max_iteration": self.settings.iterations,
+                "loss": loss,
+                "ema_loss": ema_loss
+                }}
+            }
+            server_communicator.send_message(data)
 
     def on_debug_toggle(self, val):
         global server_communicator
@@ -268,6 +274,19 @@ class ServerController:
         data = {"debug": {"debug_enabled" if self.DEBUG else "debug_disabled": True}}
         server_communicator.send_message(data)
         self.loading = False
+
+    def on_connect(self):
+        global server_communicator
+        # Send messages for each of the objects to send settings state for
+        data = {"other": {"settings_state": self.settings.params, 
+                          "debug": self.DEBUG,
+                          "dataset_loaded": self.dataset is not None},
+                "trainer": {"step": {"iteration": self.trainer._iteration,
+                                     "max_iteration": self.settings.iterations,
+                                     "loss": self.trainer.last_loss,
+                                     "ema_loss": self.trainer.ema_loss}}}
+        server_communicator.send_message(data)
+        
 
 class ServerCommunicator(threading.Thread):
 
@@ -295,6 +314,7 @@ class ServerCommunicator(threading.Thread):
                 self.conn : connection.Connection = self.listener.accept()
                 print(f'Connection accepted from {self.listener.last_accepted}')
                 self.state = "connected"
+                self.server_controller.on_connect()
 
             elif(self.state == "connected"):
                 # blocking call, see check_for_msg
@@ -334,8 +354,9 @@ class ServerCommunicator(threading.Thread):
             try:
                 #print(f"Sending {data}")
                 self.conn.send(data)
-            except Exception:
+            except Exception as e:
                 print("Failed to send data.")
+                raise e
 
 
 # global communicator so the thread can be shut down with ctrl-c
