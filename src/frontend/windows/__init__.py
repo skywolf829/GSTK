@@ -7,7 +7,7 @@ class Window:
 
         app_controller.update_view_menu(self.tag, True)
 
-    def receive_message(data : dict):
+    def receive_message(self, data : dict):
         pass
 
     def on_close(self):

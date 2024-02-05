@@ -7,8 +7,8 @@ class RenderWindow(Window):
     def __init__(self, app_controller):
         super().__init__("render_window", app_controller)
 
-        default_width = 400
-        default_height = 400
+        default_width = 800
+        default_height = 800
         self.max_tex_width = 2000
         self.max_tex_height = 2000
         self.resizing = True
@@ -20,10 +20,10 @@ class RenderWindow(Window):
 
         with dpg.texture_registry(show=False):
             dpg.add_raw_texture(width=self.max_tex_width, 
-                                height=self.max_tex_height, 
-                default_value=self.tex, 
-                format=dpg.mvFormat_Float_rgba,
-                tag="render_view_texture")
+                        height=self.max_tex_height, 
+                        default_value=self.tex, 
+                        format=dpg.mvFormat_Float_rgba,
+                        tag="render_view_texture")
                 
         with dpg.window(label="Render View", tag=self.tag, 
                         width=default_width, height=default_height,
@@ -39,32 +39,56 @@ class RenderWindow(Window):
             dpg.add_item_resize_handler(callback=self.on_resize)
         
         with dpg.handler_registry(show=True):
-            dpg.add_mouse_release_handler(callback=self.mouse_released)
+            dpg.add_mouse_release_handler(callback=self.update_window_size)
 
         dpg.bind_item_handler_registry(self.tag, "render_window_resize_handler")
         dpg.set_viewport_resize_callback(self.on_resize)
         
     
-    def mouse_released(self, sender, app_data):
-        if(self.resizing):
+    def update_window_size(self, force=False):
+        if(self.resizing or force):
             h = min(dpg.get_item_height(self.tag), self.max_tex_height)
             w = min(dpg.get_item_width(self.tag), self.max_tex_width)
 
             print(f"Resizing to {h}x{w}")
             dpg.configure_item("render_view_image", width=w, height=h,
                                uv_max = (w/self.max_tex_width, h/self.max_tex_height))
-            #dpg.configure_item("render_view_texture", width=w, height=h)
-            #r = np.random.random([h, w, 4]).astype(np.float32)
-            #self.on_new_image(r)
             self.resizing = False
+            self.update_renderer_settings()
             
+    def update_renderer_settings(self):
+        scaling = dpg.get_value("resolution_scaling")
+        
+        max_width = dpg.get_item_width("render_view_texture")
+        max_height = dpg.get_item_height("render_view_texture")
+        w = int(scaling*min(max_width,dpg.get_item_width("render_window")))
+        h = int(scaling*min(max_height,dpg.get_item_height("render_window")))
+        
+        dpg.set_value("effective_resolution", f"Resolution: {w}x{h}")
 
-    def update_dynamic_texture(self, data):
+        trainer_settings = {
+            "width" : w,
+            "height" : h,
+            "fov_x" : dpg.get_value("fov_x"),
+            "fov_y" : dpg.get_value("fov_y"),
+            "near_plane" : dpg.get_value("near_plane"),
+            "far_plane" : dpg.get_value("far_plane")
+        }
+        data_to_send = {
+            "update_renderer_settings" : trainer_settings
+        }
+        self.app_controller.app_communicator.send_message(data_to_send)
+
+    def on_new_image(self, data):
         #print("Updating texture")
-        self.tex[0:min(self.tex.shape[0], data.shape[0]),
-                 0:min(self.tex.shape[1], data.shape[1]),
-                 0:min(self.tex.shape[2], data.shape[2])] = data
+        x_dim = min(self.tex.shape[0], data.shape[0])
+        y_dim = min(self.tex.shape[1], data.shape[1])
+        z_dim = min(self.tex.shape[2], data.shape[2])
+        self.tex[0:x_dim,0:y_dim,0:z_dim] = data[0:x_dim,0:y_dim,0:z_dim]
         dpg.set_value("render_view_texture", self.tex)
+        
+        dpg.configure_item("render_view_image",
+            uv_max = (y_dim/self.max_tex_width, x_dim/self.max_tex_height))
         
         self.frames_this_update += 1
         t = time.time() - self.last_fps_update
@@ -74,21 +98,10 @@ class RenderWindow(Window):
             self.frames_this_update = 0
             self.last_fps_update = time.time()
 
-
-    def on_new_image(self, data):
-        self.update_dynamic_texture(data)
-
     def on_resize(self):
         self.resizing = True
-
-    def on_close(self):
-        self.app_controller.update_view_menu(self.tag, False)
-        dpg.delete_item("render_view_texture")
-        dpg.delete_item("render_view_image")
-        dpg.delete_item("render_window_resize_handler")
-        dpg.delete_item(self.tag)
     
     def receive_message(self, data: dict):
         if("image" in data.keys()):
-            img = data['image'].astype(np.float32) / 255.
+            img = data['image'].astype(np.float32) / 255
             self.on_new_image(img)

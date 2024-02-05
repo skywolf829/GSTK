@@ -62,6 +62,7 @@ class GaussianModel:
         self.max_radii2D = torch.empty(0)
         self.optimizer = None
         self.percent_dense = 0
+        self.initialized = False
         self.setup_functions()
 
     def on_settings_update(self, new_settings):
@@ -118,7 +119,7 @@ class GaussianModel:
         if self.active_sh_degree < self.settings.sh_degree:
             self.active_sh_degree += 1
 
-    def create_from_pcd(self, pcd : BasicPointCloud, settings : Settings):
+    def create_from_pcd(self, pcd : BasicPointCloud):
         fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().to(self.settings.device)
         fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().to(self.settings.device))
         features = torch.zeros((fused_color.shape[0], 3, (self.settings.sh_degree + 1) ** 2)).float().to(self.settings.device)
@@ -146,6 +147,7 @@ class GaussianModel:
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
         self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device=self.settings.device)
+        self.initialized = True
 
     def construct_list_of_attributes(self):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
@@ -278,7 +280,6 @@ class GaussianModel:
 
         # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
         # scaling / rotation by the rasterizer.
-        cov3D_precomp = None
         scales = self.get_scaling
         rotations = self.get_rotation
 
@@ -290,12 +291,10 @@ class GaussianModel:
         rendered_image, radii = rasterizer(
             means3D = means3D,
             means2D = means2D,
-            shs = shs,
-            colors_precomp = None,
             opacities = opacity,
+            shs = shs,
             scales = scales,
-            rotations = rotations,
-            cov3D_precomp = cov3D_precomp)
+            rotations = rotations)
 
         # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
         # They will be excluded from value updates used in the splitting criteria.

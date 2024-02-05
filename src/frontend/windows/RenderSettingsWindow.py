@@ -12,8 +12,13 @@ class RenderSettingsWindow(Window):
             # Trainer settings
             dpg.add_text("Rendering settings")
             
-            dpg.add_input_int(label="width", default_value=800, min_value=100, max_value = 2000, tag="res_x")
-            dpg.add_input_int(label='height', default_value= 800, min_value=100, max_value = 2000, tag="res_y")
+            dpg.add_slider_float(label="Resolution scaling",
+                                 tag="resolution_scaling",
+                                 default_value=1.0,
+                                 min_value = 0.1,
+                                 max_value = 1.0,
+                                 format='%.2f')
+            dpg.add_text("Resolution: ", tag="effective_resolution")
             
             dpg.add_slider_float(label="FoV x", 
                                tag="fov_x", 
@@ -48,9 +53,17 @@ class RenderSettingsWindow(Window):
                         callback=self.update_renderer_settings)    
       
     def update_renderer_settings(self):
+        scaling = dpg.get_value("resolution_scaling")
+
+        max_width = dpg.get_item_width("render_view_texture")
+        max_height = dpg.get_item_height("render_view_texture")
+        w = int(scaling*min(max_width,dpg.get_item_width("render_window")))
+        h = int(scaling*min(max_height,dpg.get_item_height("render_window")))
+        
+        dpg.set_value("effective_resolution", f"Resolution: {w}x{h}")
         trainer_settings = {
-            "width" : dpg.get_value("res_x"),
-            "height" : dpg.get_value("res_y"),
+            "width" : w,
+            "height" : h,
             "fov_x" : dpg.get_value("fov_x"),
             "fov_y" : dpg.get_value("fov_y"),
             "near_plane" : dpg.get_value("near_plane"),

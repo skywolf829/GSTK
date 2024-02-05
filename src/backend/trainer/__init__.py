@@ -61,6 +61,18 @@ class Trainer:
     
     def set_model(self, model : GaussianModel):
         self.model = model
+        self.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
+        self.denom = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
+        l = [
+            {'params': [self.model._xyz], 'lr': self.settings.position_lr_init * self.settings.spatial_lr_scale, "name": "xyz"},
+            {'params': [self.model._features_dc], 'lr': self.settings.feature_lr, "name": "f_dc"},
+            {'params': [self.model._features_rest], 'lr': self.settings.feature_lr / 20.0, "name": "f_rest"},
+            {'params': [self.model._opacity], 'lr': self.settings.opacity_lr, "name": "opacity"},
+            {'params': [self.model._scaling], 'lr': self.settings.scaling_lr, "name": "scaling"},
+            {'params': [self.model._rotation], 'lr': self.settings.rotation_lr, "name": "rotation"}
+        ]
+
+        self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
     
     def on_settings_update(self, new_settings: Settings):
         
@@ -165,8 +177,8 @@ class Trainer:
         self.model._opacity = optimizable_tensors["opacity"]
         self.model._scaling = optimizable_tensors["scaling"]
         self.model._rotation = optimizable_tensors["rotation"]
-        self.model.xyz_gradient_accum = self.model.xyz_gradient_accum[valid_points_mask]
-        self.model.denom = self.model.denom[valid_points_mask]
+        self.xyz_gradient_accum = self.xyz_gradient_accum[valid_points_mask]
+        self.denom = self.denom[valid_points_mask]
         self.model.max_radii2D = self.model.max_radii2D[valid_points_mask]
 
     def densification_postfix(self, new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation):
@@ -184,8 +196,8 @@ class Trainer:
         self.model._opacity = optimizable_tensors["opacity"]
         self.model._scaling = optimizable_tensors["scaling"]
         self.model._rotation = optimizable_tensors["rotation"]
-        self.model.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
-        self.model.denom = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
+        self.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
+        self.denom = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
         self.model.max_radii2D = torch.zeros((self.model.get_num_gaussians), device=self.settings.device)
 
     def densify_and_split(self, grads : torch.Tensor, grad_threshold, scene_extent, N=2):
@@ -229,7 +241,7 @@ class Trainer:
         self.densification_postfix(new_xyz, new_features_dc, new_features_rest, new_opacities, new_scaling, new_rotation)
 
     def densify_and_prune(self, max_grad : torch.Tensor, min_opacity, extent, max_screen_size):
-        grads = self.model.xyz_gradient_accum / self.model.denom
+        grads = self.xyz_gradient_accum / self.denom
         grads[grads.isnan()] = 0.0
 
         self.densify_and_clone(grads, max_grad, extent)
@@ -245,8 +257,8 @@ class Trainer:
         torch.cuda.empty_cache()
 
     def add_densification_stats(self, viewspace_point_tensor : torch.Tensor, update_filter):
-        self.model.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
-        self.model.denom[update_filter] += 1
+        self.xyz_gradient_accum[update_filter] += torch.norm(viewspace_point_tensor.grad[update_filter,:2], dim=-1, keepdim=True)
+        self.denom[update_filter] += 1
 
     def pre_iteration_checks(self, iteration): 
         self.update_learning_rate(iteration)
@@ -310,13 +322,13 @@ class Trainer:
     
     def train_all(self):
         t = tqdm(range(self._iteration, self.settings.iterations))
-        for iter in t:
-            img, loss, ema_loss = self.step()
+        for _ in t:
+            i, img, loss, ema_loss = self.step()
             t.set_description(f"[{self._iteration+1}/{self.settings.iterations}] loss: {ema_loss:0.04f}")
     
     def train_threaded(self, server_controller):
         while self.training:
-            last_img, last_loss, ema_last_loss = self.step()
+            i, last_img, last_loss, ema_last_loss = self.step()
             if(self._iteration % 25 == 0):
                 server_controller.on_train_step(self._iteration, 
                                             last_img.detach().cpu().numpy(), 

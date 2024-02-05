@@ -82,6 +82,10 @@ class AppController:
                     tag="render_window_menu_item", 
                     callback=lambda:self.menu_button_click(RenderWindow, "render_window"),
                     check=True)
+                dpg.add_menu_item(label="Render settings", 
+                    tag="render_settings_window_menu_item", 
+                    callback=lambda:self.menu_button_click(RenderSettingsWindow, "render_settings_window"),
+                    check=True)
                 dpg.add_menu_item(label="Dataset setup", 
                     tag="dataset_setup_window_menu_item", 
                     callback=lambda:self.menu_button_click(DatasetSetupWindow, "dataset_setup_window"),
@@ -201,47 +205,48 @@ class AppCommunicator(threading.Thread):
 
     # Tries to connect to server and updates app controller if necessary
     def try_server_connect(self, ip:str, port:int):
-        if(self.connected):
-            print("Already connected, cannot connect again!")
-            return
-        try:
-            self.conn = connection.Client((ip, port), authkey=b"GRAVITY")
-            print(f"Successfully connected to {ip}:{port}")
-            self.connected = True
-            self.app_controller.distribute_message_data(
-                {"connection": {"connected": True}}
-            )
-        except:
-            print(f"WARNING: {ip}:{port} is not available.")
-            self.connected = False
+        with self.lock:
+            if(self.connected):
+                print("Already connected, cannot connect again!")
+                return
+            try:
+                self.conn = connection.Client((ip, port), authkey=b"GRAVITY")
+                print(f"Successfully connected to {ip}:{port}")
+                self.connected = True
+                self.app_controller.distribute_message_data(
+                    {"connection": {"connected": True}}
+                )
+            except:
+                print(f"WARNING: {ip}:{port} is not available.")
+                self.connected = False
     
     # Runs infinitely to listen for messages (until close)
     def run(self):
         while not self.stop:
             if self.conn is not None and self.connected:
-                try:
-                    if(self.conn.poll()):
-                        data = self.conn.recv()
-                        self.app_controller.distribute_message_data(data)
+                try:                    
+                    with self.lock:
+                        if(self.conn.poll()):
+                            data = self.conn.recv()
+                            self.app_controller.distribute_message_data(data)
                 except Exception as e:
                     print(e)
-                    print(data)
-                    raise e
-                    pass
+                    self.disconnect_from_server()
 
         self.stop()
 
     # Disconnects and updates the app controller
     def disconnect_from_server(self, popup=True):        
         if(self.conn is not None):
-            print(f"Disconnecting")
-            self.conn.close()
-            self.conn = None
-            self.connected = False
-            if(popup):
-                self.app_controller.distribute_message_data(
-                        {"connection": {"disconnected": True}}
-                )
+            with self.lock:
+                print(f"Disconnecting")
+                self.conn.close()
+                self.conn = None
+                self.connected = False
+                if(popup):
+                    self.app_controller.distribute_message_data(
+                            {"connection": {"disconnected": True}}
+                    )
 
     def send_message(self, data):
         if(self.conn is not None and self.connected):

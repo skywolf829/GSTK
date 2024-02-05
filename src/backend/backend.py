@@ -79,6 +79,9 @@ class ServerController:
                                  args=[data['update_model_settings']])
             self.loading = True            
             t.start()
+        
+        if("update_renderer_settings" in data.keys()):
+           self.update_renderer_settings(data['update_renderer_settings'])
 
         if("training_start" in data.keys()):
             self.on_train_start()
@@ -134,6 +137,9 @@ class ServerController:
             self.dataset = Dataset(self.settings, debug=self.DEBUG)
             self.trainer.set_dataset(self.dataset)
             self.trainer.on_settings_update(self.settings)
+            if not self.model.initialized:
+                self.model.create_from_pcd(self.dataset.scene_info.point_cloud)
+                self.trainer.set_model(self.model)
         except Exception as e:
             data = {
                 "dataset": {"dataset_error": f"Dataset failed to initialize, likely doesn't recognize dataset type."}
@@ -218,6 +224,14 @@ class ServerController:
         server_communicator.send_message(data)
         print("Updated model settings")
         self.loading = False
+
+    def update_renderer_settings(self, data):
+        self.render_cam.image_width = data['width']
+        self.render_cam.image_height = data['height']
+        self.render_cam.FoVx = np.deg2rad(data['fov_x'])
+        self.render_cam.FoVy = np.deg2rad(data['fov_y'])
+        self.render_cam.znear = data['near_plane']
+        self.render_cam.zfar = data['far_plane']
 
     def on_train_start(self):
         global server_communicator
@@ -310,25 +324,27 @@ class ServerController:
         global server_communicator
         t0 = time.time()
         frames = 0
-        while self.renderer_enabled:
-            if(server_communicator.state == "connected" and not self.loading):
-                render_package = self.model.render(self.render_cam)
-                server_communicator.send_message(
-                    { "render": {
-                        "image" :
-                            (render_package['render'].detach().cpu().numpy()*255).clip(0, 255).astype(np.uint8)
-                        }
-                    }
-                )
-                frames += 1
-                t = time.time() - t0
-                if(t > 1.0):
-                    fps = frames / t
-                    print(f"FPS: {fps:0.02f}")
-                    frames = 0
-                    t0 = time.time()
-            else:
-                time.sleep(1.0)
+        with torch.no_grad():
+            while self.renderer_enabled:
+                if(server_communicator.state == "connected" and not self.loading):
+                    if(self.model.initialized):
+                        render_package = self.model.render(self.render_cam)
+                        server_communicator.send_message(
+                            { "render": {
+                                "image" :
+                                    (torch.clamp(render_package['render'], min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy()
+                                }
+                            }
+                        )
+                        frames += 1
+                        t = time.time() - t0
+                        if(t > 1.0):
+                            fps = frames / t
+                            #print(f"FPS: {fps:0.02f}")
+                            frames = 0
+                            t0 = time.time()
+                else:
+                    time.sleep(1.0)
 
 class ServerCommunicator(threading.Thread):
 
@@ -377,19 +393,20 @@ class ServerCommunicator(threading.Thread):
         self.stop()
             
     def check_for_msg(self):
-        try:
-            # poll tells us if there is a message ready
-            if(self.conn.poll()):
-                # Blocking call, will wait here
-                item = self.conn.recv()
-            else:
+        with self.lock:
+            try:
+                # poll tells us if there is a message ready
+                if(self.conn.poll()):
+                    # Blocking call, will wait here
+                    item = self.conn.recv()
+                else:
+                    item = None
+            except Exception:
+                print(f"Connection closed")
+                self.state = "uninitialized"
+                self.conn.close()
+                self.listener.close()
                 item = None
-        except Exception:
-            print(f"Connection closed")
-            self.state = "uninitialized"
-            self.conn.close()
-            self.listener.close()
-            item = None
         return item
 
     def send_message(self, data):
@@ -416,5 +433,5 @@ if __name__ == "__main__":
 
     # infinite loop until ctrl-c
     while True:
-        pass
+        time.sleep(1.0)
     

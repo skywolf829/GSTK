@@ -30,14 +30,14 @@ def geom_transform_points(points, transf_matrix):
 
 def getWorld2View(R, t):
     Rt = np.zeros((4, 4))
-    Rt[:3, :3] = R.transpose()
+    Rt[:3, :3] = R.T
     Rt[:3, 3] = t
     Rt[3, 3] = 1.0
     return np.float32(Rt)
 
 def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
     Rt = np.zeros((4, 4))
-    Rt[:3, :3] = R.transpose()
+    Rt[:3, :3] = R.T
     Rt[:3, 3] = t
     Rt[3, 3] = 1.0
 

@@ -82,9 +82,9 @@ class RenderCam:
                  width=800, height=800, 
                  fovy=65., fovx=65., 
                  znear=0.01, zfar=100.0,
-                 T=torch.tensor([0.,0.,0.], dtype=torch.float32, device="cuda" if torch.cuda.is_available() else "cpu"),
-                 R=torch.eye(3, dtype=torch.float32, device="cuda" if torch.cuda.is_available() else "cpu"),
-                 device="cuda" if torch.cuda.is_available() else "cpu"):
+                 T=np.array([0.,0.,0.], dtype=np.float32),
+                 R=np.eye(3, dtype=np.float32),
+                 device = "cuda" if torch.cuda.is_available() else "cpu"):
         self.data_device = device
         self.image_width : int = width
         self.image_height : int  = height    
@@ -102,12 +102,12 @@ class RenderCam:
     
     @property
     def full_proj_transform(self):
-        getProjectionMatrix(znear=self.znear, 
+        return getProjectionMatrix(znear=self.znear, 
                             zfar=self.zfar, 
                             fovX=self.FoVx, 
                             fovY=self.FoVy,
-                            device=self.data_device).transpose(0,1).to(self.data_device)
+                            device=self.data_device).transpose(0,1)
     
     @property
     def camera_center(self):
-        return self.T
+        return torch.tensor(self.T, device=self.data_device)
