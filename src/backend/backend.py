@@ -9,8 +9,11 @@ from settings import Settings
 import threading
 import multiprocessing.connection as connection
 import signal 
+import time
 import torch
+import numpy as np
 from dataset.cameras import RenderCam
+import multiprocessing
 
 def signal_handler(sig, frame):
     pid = os.getpid()
@@ -38,11 +41,16 @@ class ServerController:
         self.render_cam = RenderCam()
 
         self.loading = False
+        self.renderer_enabled = True
         self.DEBUG = False
 
         global server_communicator
         server_communicator = ServerCommunicator(self, ip, port)
         server_communicator.start()
+
+        self.render_thread = threading.Thread(target=self.render_loop, args=(), 
+                                              daemon=True)
+        self.render_thread.start()
         
     def process_message(self,data):
         global server_communicator
@@ -124,6 +132,8 @@ class ServerController:
             data = {"dataset": {"dataset_loading": f""}}
             server_communicator.send_message(data)
             self.dataset = Dataset(self.settings, debug=self.DEBUG)
+            self.trainer.set_dataset(self.dataset)
+            self.trainer.on_settings_update(self.settings)
         except Exception as e:
             data = {
                 "dataset": {"dataset_error": f"Dataset failed to initialize, likely doesn't recognize dataset type."}
@@ -157,8 +167,7 @@ class ServerController:
             self.settings.params[k] = data[k]
             
         try:
-            self.trainer.update_settings(self.settings)
-            self.trainer.training_setup()
+            self.trainer.on_settings_update(self.settings)
         except Exception as e:
             data = {
                 "trainer": {"trainer_settings_updated_error": f"Failed to update trainer settings."}
@@ -201,6 +210,7 @@ class ServerController:
         self.settings.params['sh_degree'] = data['sh_degree']
         self.settings.params['device'] = data['device']
         self.model.on_settings_update(self.settings)
+        self.trainer.on_settings_update(self.settings)
         
         data = {
             "model": {"model_settings_updated": f"Model settings were updated"}
@@ -250,15 +260,14 @@ class ServerController:
 
     def on_train_step(self, iteration, img, loss, ema_loss):
         global server_communicator
-        if (iteration % 25 == 0):
-            data = {"trainer": {"step": {
-                "iteration": iteration,
-                "max_iteration": self.settings.iterations,
-                "loss": loss,
-                "ema_loss": ema_loss
-                }}
-            }
-            server_communicator.send_message(data)
+        data = {"trainer": {"step": {
+            "iteration": iteration,
+            "max_iteration": self.settings.iterations,
+            "loss": loss,
+            "ema_loss": ema_loss
+            }}
+        }
+        server_communicator.send_message(data)
 
     def on_debug_toggle(self, val):
         global server_communicator
@@ -280,13 +289,46 @@ class ServerController:
         # Send messages for each of the objects to send settings state for
         data = {"other": {"settings_state": self.settings.params, 
                           "debug": self.DEBUG,
-                          "dataset_loaded": self.dataset is not None},
+                          "dataset_loaded": self.dataset is not None,
+                          "renderer_settings": {
+                              "image_width": self.render_cam.image_width,
+                              "image_height": self.render_cam.image_height,
+                              "fov_x": self.render_cam.FoVx,
+                              "fov_y": self.render_cam.FoVy,
+                              "near_plane": self.render_cam.znear,
+                              "far_plane": self.render_cam.zfar,
+                          }
+                          },
                 "trainer": {"step": {"iteration": self.trainer._iteration,
                                      "max_iteration": self.settings.iterations,
                                      "loss": self.trainer.last_loss,
-                                     "ema_loss": self.trainer.ema_loss}}}
+                                     "ema_loss": self.trainer.ema_loss}}
+                }
         server_communicator.send_message(data)
         
+    def render_loop(self):
+        global server_communicator
+        t0 = time.time()
+        frames = 0
+        while self.renderer_enabled:
+            if(server_communicator.state == "connected" and not self.loading):
+                render_package = self.model.render(self.render_cam)
+                server_communicator.send_message(
+                    { "render": {
+                        "image" :
+                            (render_package['render'].detach().cpu().numpy()*255).clip(0, 255).astype(np.uint8)
+                        }
+                    }
+                )
+                frames += 1
+                t = time.time() - t0
+                if(t > 1.0):
+                    fps = frames / t
+                    print(f"FPS: {fps:0.02f}")
+                    frames = 0
+                    t0 = time.time()
+            else:
+                time.sleep(1.0)
 
 class ServerCommunicator(threading.Thread):
 
@@ -300,6 +342,7 @@ class ServerCommunicator(threading.Thread):
         self.listener : connection.Listener = None
         self.conn : connection.Connection = None
         self.stop = False
+        self.lock = multiprocessing.Lock()
 
     def run(self):
         while not self.stop:
@@ -350,13 +393,13 @@ class ServerCommunicator(threading.Thread):
         return item
 
     def send_message(self, data):
-        if(self.state == "connected"):
-            try:
-                #print(f"Sending {data}")
-                self.conn.send(data)
-            except Exception as e:
-                print("Failed to send data.")
-                raise e
+        with self.lock:
+            if(self.state == "connected"):
+                try:
+                    #print(f"Sending {data}")
+                    self.conn.send(data)
+                except Exception as e:
+                    print("Failed to send data.")
 
 
 # global communicator so the thread can be shut down with ctrl-c

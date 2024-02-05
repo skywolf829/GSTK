@@ -86,12 +86,12 @@ class RenderCam:
                  R=torch.eye(3, dtype=torch.float32, device="cuda" if torch.cuda.is_available() else "cpu"),
                  device="cuda" if torch.cuda.is_available() else "cpu"):
         self.data_device = device
-        self.image_width = width
-        self.image_height = height    
-        self.FoVy = fovy
-        self.FoVx = fovx
-        self.znear = znear
-        self.zfar = zfar
+        self.image_width : int = width
+        self.image_height : int  = height    
+        self.FoVy : float = fovy
+        self.FoVx : float = fovx
+        self.znear : float = znear
+        self.zfar : float = zfar
         self.T = T
         self.R = R
 

@@ -37,22 +37,6 @@ class Trainer:
         self.step_times_each_iter = []
 
         self.DEBUG = debug
-    
-    def set_dataset(self, dataset : Dataset):
-        self.dataset = dataset
-    
-    def set_model(self, model : GaussianModel):
-        self.model = model
-    
-    def update_settings(self, new_settings: Settings):
-        
-        # TODO
-        # might want to check if device changed, and move everything to new device
-        self.settings = new_settings
-        # TODO
-        # update learning rates and all the other settings in the setup.
-
-    def training_setup(self):
         self.percent_dense = self.settings.percent_dense
         self.xyz_gradient_accum = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
         self.denom = torch.zeros((self.model.get_num_gaussians, 1), device=self.settings.device)
@@ -71,7 +55,36 @@ class Trainer:
                                                     lr_final=self.settings.position_lr_final*self.settings.spatial_lr_scale,
                                                     lr_delay_mult=self.settings.position_lr_delay_mult,
                                                     max_steps=self.settings.position_lr_max_steps)
+    
+    def set_dataset(self, dataset : Dataset):
+        self.dataset = dataset
+    
+    def set_model(self, model : GaussianModel):
+        self.model = model
+    
+    def on_settings_update(self, new_settings: Settings):
         
+        self.settings = new_settings 
+
+        with torch.no_grad():
+            if(self.xyz_gradient_accum.device.type not in self.settings.device):
+                self.xyz_gradient_accum = self.xyz_gradient_accum.to(self.settings.device)
+                self.denom = self.denom.to(self.settings.device)
+                
+            l = [
+                {'params': [self.model._xyz], 'lr': self.settings.position_lr_init * self.settings.spatial_lr_scale, "name": "xyz"},
+                {'params': [self.model._features_dc], 'lr': self.settings.feature_lr, "name": "f_dc"},
+                {'params': [self.model._features_rest], 'lr': self.settings.feature_lr / 20.0, "name": "f_rest"},
+                {'params': [self.model._opacity], 'lr': self.settings.opacity_lr, "name": "opacity"},
+                {'params': [self.model._scaling], 'lr': self.settings.scaling_lr, "name": "scaling"},
+                {'params': [self.model._rotation], 'lr': self.settings.rotation_lr, "name": "rotation"}
+            ]
+
+            self.optimizer = torch.optim.Adam(l, lr=0.0, eps=1e-15)
+            self.xyz_scheduler_args = get_expon_lr_func(lr_init=self.settings.position_lr_init*self.settings.spatial_lr_scale,
+                                                        lr_final=self.settings.position_lr_final*self.settings.spatial_lr_scale,
+                                                        lr_delay_mult=self.settings.position_lr_delay_mult,
+                                                        max_steps=self.settings.position_lr_max_steps)
 
     def update_learning_rate(self, iteration):
         ''' Learning rate scheduling per step '''
@@ -304,6 +317,7 @@ class Trainer:
     def train_threaded(self, server_controller):
         while self.training:
             last_img, last_loss, ema_last_loss = self.step()
-            server_controller.on_train_step(self._iteration, 
+            if(self._iteration % 25 == 0):
+                server_controller.on_train_step(self._iteration, 
                                             last_img.detach().cpu().numpy(), 
                                             last_loss, ema_last_loss)

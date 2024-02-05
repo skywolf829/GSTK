@@ -2,6 +2,7 @@ import dearpygui.dearpygui as dpg
 import multiprocessing.connection as connection
 import uuid
 import threading
+import multiprocessing
 
 from windows.MainWindow import MainWindow
 from windows.ServerConnectWindow import ServerConnectWindow
@@ -11,6 +12,7 @@ from windows.TrainingSettingsWindow import TrainingSettingsWindow
 from windows.ModelSettingsWindow import ModelSettingsWindow
 from windows.TrainerWindow import TrainerWindow
 from windows.DebugWindow import DebugWindow
+from windows.RenderSettingsWindow import RenderSettingsWindow
 
 class AppController:
     def __init__(self):
@@ -38,6 +40,7 @@ class AppController:
         self.trainer_window = TrainerWindow(self)
         self.dataset_window = DatasetSetupWindow(self)
         self.debug_window = DebugWindow(self)
+        self.renderer_settings_window = RenderSettingsWindow(self)
 
 
         self.register_message_listener(self, "other")
@@ -132,6 +135,7 @@ class AppController:
     it to the registered listeners
     '''
     def distribute_message_data(self, data):
+        #print(data)
         for tag in data.keys():
             if(tag not in self.listened_tags.keys()):
                 print(f"No listeners for tag {tag}")
@@ -174,6 +178,8 @@ class AppController:
             self.debug_window.update_debug_val(data['debug'])
         if('dataset_loaded' in data.keys()):
             self.dataset_window.update_dataset_loaded_val(data['dataset_loaded'])
+        if("render" in data.keys()):
+            self.renderer_settings_window.update_renderer_settings(data['renderer_settings'])
 
 
 class AppCommunicator(threading.Thread):
@@ -184,6 +190,7 @@ class AppCommunicator(threading.Thread):
         self.app_controller = app_controller
         self.stop = False
         self.conn = None
+        self.lock = multiprocessing.Lock()
     
     # Toggles server connection. Connects if not connected, otherwise disconnects
     def toggle_server_connection(self, ip:str=None, port:int=None):
@@ -217,7 +224,9 @@ class AppCommunicator(threading.Thread):
                         data = self.conn.recv()
                         self.app_controller.distribute_message_data(data)
                 except Exception as e:
-                    # Likely just disconnected
+                    print(e)
+                    print(data)
+                    raise e
                     pass
 
         self.stop()
@@ -237,7 +246,8 @@ class AppCommunicator(threading.Thread):
     def send_message(self, data):
         if(self.conn is not None and self.connected):
             try:
-                self.conn.send(data)
+                with self.lock:
+                    self.conn.send(data)
             except Exception as e:
                 print("Could not send data")
                 self.disconnect_from_server(popup=False)
