@@ -18,10 +18,16 @@ from torch import nn
 from utils.system_utils import mkdir_p
 from plyfile import PlyData, PlyElement
 from utils.sh_utils import RGB2SH
-from simple_knn._C import distCUDA2
+try:
+    from simple_knn._C import distCUDA2
+    from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
+    cuda_packages_imported = True
+except Exception as e:
+    print("CUDA packages not found - running without")
+    cuda_packages_imported = False
+
 from utils.graphics_utils import BasicPointCloud
 import math
-from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from settings import Settings
 
 class GaussianModel:
@@ -36,13 +42,14 @@ class GaussianModel:
 
         self.rotation_activation = torch.nn.functional.normalize
 
-    def __init__(self, settings):
+    def __init__(self, settings, debug=False):
+        self.settings = settings
+        self.DEBUG = debug
         self.active_sh_degree = 0
-        self.max_sh_degree = settings.sh_degree  
-        if(settings.white_background):
-            bg = torch.tensor([1.,1.,1.], device="cuda")
-        elif(not settings.random_background):
-            bg = torch.tensor([0.,0.,0.], device="cuda")
+        if(self.settings.white_background):
+            bg = torch.tensor([1.,1.,1.], device=self.settings.device)
+        elif(not self.settings.random_background):
+            bg = torch.tensor([0.,0.,0.], device=self.settings.device)
         else:
             bg = None
         self.background = bg
@@ -53,46 +60,34 @@ class GaussianModel:
         self._rotation = torch.empty(0)
         self._opacity = torch.empty(0)
         self.max_radii2D = torch.empty(0)
-        self.xyz_gradient_accum = torch.empty(0)
-        self.denom = torch.empty(0)
         self.optimizer = None
         self.percent_dense = 0
-        self.spatial_lr_scale = 0
+        self.initialized = False
         self.setup_functions()
 
-    def capture(self):
-        return (
-            self.active_sh_degree,
-            self._xyz,
-            self._features_dc,
-            self._features_rest,
-            self._scaling,
-            self._rotation,
-            self._opacity,
-            self.max_radii2D,
-            self.xyz_gradient_accum,
-            self.denom,
-            self.optimizer.state_dict(),
-            self.spatial_lr_scale,
-        )
-    
-    def restore(self, model_args, training_args):
-        (self.active_sh_degree, 
-        self._xyz, 
-        self._features_dc, 
-        self._features_rest,
-        self._scaling, 
-        self._rotation, 
-        self._opacity,
-        self.max_radii2D, 
-        xyz_gradient_accum, 
-        denom,
-        opt_dict, 
-        self.spatial_lr_scale) = model_args
-        self.training_setup(training_args)
-        self.xyz_gradient_accum = xyz_gradient_accum
-        self.denom = denom
-        self.optimizer.load_state_dict(opt_dict)
+    def on_settings_update(self, new_settings):
+
+        self.settings = new_settings
+        
+        if(self.settings.white_background):
+            bg = torch.tensor([1.,1.,1.], device=self.settings.device)
+        elif(not self.settings.random_background):
+            bg = torch.tensor([0.,0.,0.], device=self.settings.device)
+        else:
+            bg = None
+        self.background = bg
+
+        if(self._xyz.device.type not in self.settings.device):
+            with torch.no_grad():
+                self._xyz = self._xyz.to(self.settings.device)
+                self._features_dc = self._features_dc.to(self.settings.device)
+                self._features_rest = self._features_rest.to(self.settings.device)
+                self._scaling = self._scaling.to(self.settings.device)
+                self._rotation = self._rotation.to(self.settings.device)
+                self._opacity = self._opacity.to(self.settings.device)
+                self.max_radii2D = self.max_radii2D.to(self.settings.device)
+                self.background = self.background.to(self.settings.device)
+
 
     @property
     def get_scaling(self):
@@ -121,25 +116,29 @@ class GaussianModel:
         return self._xyz.shape[0]
 
     def oneupSHdegree(self):
-        if self.active_sh_degree < self.max_sh_degree:
+        if self.active_sh_degree < self.settings.sh_degree:
             self.active_sh_degree += 1
 
-    def create_from_pcd(self, pcd : BasicPointCloud, settings : Settings):
-        self.spatial_lr_scale = settings.spatial_lr_scale
-        fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().cuda()
-        fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().cuda())
-        features = torch.zeros((fused_color.shape[0], 3, (self.max_sh_degree + 1) ** 2)).float().cuda()
+    def create_from_pcd(self, pcd : BasicPointCloud):
+        fused_point_cloud = torch.tensor(np.asarray(pcd.points)).float().to(self.settings.device)
+        fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().to(self.settings.device))
+        features = torch.zeros((fused_color.shape[0], 3, (self.settings.sh_degree + 1) ** 2)).float().to(self.settings.device)
         features[:, :3, 0 ] = fused_color
         features[:, 3:, 1:] = 0.0
 
         print("Number of points at initialisation : ", fused_point_cloud.shape[0])
 
-        dist2 = torch.clamp_min(distCUDA2(torch.from_numpy(np.asarray(pcd.points)).float().cuda()), 0.0000001)
+        if(cuda_packages_imported):
+            dist2 = torch.clamp_min(distCUDA2(
+                torch.from_numpy(np.asarray(pcd.points)).float().to(self.settings.device)), 0.0000001)
+        else:
+            dist2 = torch.ones([pcd.points.shape[0], 1], 
+                               device=self.settings.device, dtype=torch.float32) * 0.001
         scales = torch.log(torch.sqrt(dist2))[...,None].repeat(1, 3)
-        rots = torch.zeros((fused_point_cloud.shape[0], 4), device="cuda")
+        rots = torch.zeros((fused_point_cloud.shape[0], 4), device=self.settings.device)
         rots[:, 0] = 1
 
-        opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device="cuda"))
+        opacities = inverse_sigmoid(0.1 * torch.ones((fused_point_cloud.shape[0], 1), dtype=torch.float, device=self.settings.device))
 
         self._xyz = nn.Parameter(fused_point_cloud.requires_grad_(True))
         self._features_dc = nn.Parameter(features[:,:,0:1].transpose(1, 2).contiguous().requires_grad_(True))
@@ -147,9 +146,8 @@ class GaussianModel:
         self._scaling = nn.Parameter(scales.requires_grad_(True))
         self._rotation = nn.Parameter(rots.requires_grad_(True))
         self._opacity = nn.Parameter(opacities.requires_grad_(True))
-        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device="cuda")
-        self.xyz_gradient_accum = torch.zeros([self.get_num_gaussians, 1], dtype=torch.float32, device="cuda")
-        self.denom = torch.zeros([self.get_num_gaussians, 1], dtype=torch.int, device="cuda")
+        self.max_radii2D = torch.zeros((self.get_xyz.shape[0]), device=self.settings.device)
+        self.initialized = True
 
     def construct_list_of_attributes(self):
         l = ['x', 'y', 'z', 'nx', 'ny', 'nz']
@@ -199,12 +197,12 @@ class GaussianModel:
 
         extra_f_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("f_rest_")]
         extra_f_names = sorted(extra_f_names, key = lambda x: int(x.split('_')[-1]))
-        assert len(extra_f_names)==3*(self.max_sh_degree + 1) ** 2 - 3
+        assert len(extra_f_names)==3*(self.settings.sh_degree + 1) ** 2 - 3
         features_extra = np.zeros((xyz.shape[0], len(extra_f_names)))
         for idx, attr_name in enumerate(extra_f_names):
             features_extra[:, idx] = np.asarray(plydata.elements[0][attr_name])
         # Reshape (P,F*SH_coeffs) to (P, F, SH_coeffs except DC)
-        features_extra = features_extra.reshape((features_extra.shape[0], 3, (self.max_sh_degree + 1) ** 2 - 1))
+        features_extra = features_extra.reshape((features_extra.shape[0], 3, (self.settings.sh_degree + 1) ** 2 - 1))
 
         scale_names = [p.name for p in plydata.elements[0].properties if p.name.startswith("scale_")]
         scale_names = sorted(scale_names, key = lambda x: int(x.split('_')[-1]))
@@ -218,14 +216,14 @@ class GaussianModel:
         for idx, attr_name in enumerate(rot_names):
             rots[:, idx] = np.asarray(plydata.elements[0][attr_name])
 
-        self._xyz = nn.Parameter(torch.tensor(xyz, dtype=torch.float, device="cuda").requires_grad_(True))
-        self._features_dc = nn.Parameter(torch.tensor(features_dc, dtype=torch.float, device="cuda").transpose(1, 2).contiguous().requires_grad_(True))
-        self._features_rest = nn.Parameter(torch.tensor(features_extra, dtype=torch.float, device="cuda").transpose(1, 2).contiguous().requires_grad_(True))
-        self._opacity = nn.Parameter(torch.tensor(opacities, dtype=torch.float, device="cuda").requires_grad_(True))
-        self._scaling = nn.Parameter(torch.tensor(scales, dtype=torch.float, device="cuda").requires_grad_(True))
-        self._rotation = nn.Parameter(torch.tensor(rots, dtype=torch.float, device="cuda").requires_grad_(True))
+        self._xyz = nn.Parameter(torch.tensor(xyz, dtype=torch.float, device=self.settings.device).requires_grad_(True))
+        self._features_dc = nn.Parameter(torch.tensor(features_dc, dtype=torch.float, device=self.settings.device).transpose(1, 2).contiguous().requires_grad_(True))
+        self._features_rest = nn.Parameter(torch.tensor(features_extra, dtype=torch.float, device=self.settings.device).transpose(1, 2).contiguous().requires_grad_(True))
+        self._opacity = nn.Parameter(torch.tensor(opacities, dtype=torch.float, device=self.settings.device).requires_grad_(True))
+        self._scaling = nn.Parameter(torch.tensor(scales, dtype=torch.float, device=self.settings.device).requires_grad_(True))
+        self._rotation = nn.Parameter(torch.tensor(rots, dtype=torch.float, device=self.settings.device).requires_grad_(True))
 
-        self.active_sh_degree = self.max_sh_degree
+        self.active_sh_degree = self.settings.sh_degree
 
     def render(self, viewpoint_camera, scaling_modifier = 1.0):
         """
@@ -236,11 +234,23 @@ class GaussianModel:
     
         # Create zero tensor. We will use it to make pytorch return gradients of the 2D (screen-space) means
         screenspace_points = torch.zeros_like(self.get_xyz, dtype=self.get_xyz.dtype, 
-                            requires_grad=True, device="cuda") + 0
+                            requires_grad=True, device=self.settings.device) + 0
         try:
             screenspace_points.retain_grad()
         except:
             pass
+
+        if(not cuda_packages_imported or self.DEBUG):
+            fake_img = torch.rand([int(viewpoint_camera.image_height),
+                               int(viewpoint_camera.image_width), 
+                               3],
+                               dtype=torch.float32, device=self.settings.device)
+            radii = torch.zeros_like(self.get_xyz, dtype=self.get_xyz.dtype, 
+                            requires_grad=True, device=self.settings.device) + 1.0
+            return {"render": fake_img,
+                "viewspace_points": screenspace_points,
+                "visibility_filter" : radii > 0,
+                "radii": radii}
 
         # Set up rasterization configuration
         tanfovx = math.tan(viewpoint_camera.FoVx * 0.5)
@@ -251,7 +261,8 @@ class GaussianModel:
             image_width=int(viewpoint_camera.image_width),
             tanfovx=tanfovx,
             tanfovy=tanfovy,
-            bg=self.background if self.background is not None else torch.rand([3], device="cuda", dtype=torch.float32),
+            bg=self.background if self.background is not None \
+                else torch.rand([3], device=self.settings.device, dtype=torch.float32),
             scale_modifier=scaling_modifier,
             viewmatrix=viewpoint_camera.world_view_transform,
             projmatrix=viewpoint_camera.full_proj_transform,
@@ -269,7 +280,6 @@ class GaussianModel:
 
         # If precomputed 3d covariance is provided, use it. If not, then it will be computed from
         # scaling / rotation by the rasterizer.
-        cov3D_precomp = None
         scales = self.get_scaling
         rotations = self.get_rotation
 
@@ -281,12 +291,10 @@ class GaussianModel:
         rendered_image, radii = rasterizer(
             means3D = means3D,
             means2D = means2D,
-            shs = shs,
-            colors_precomp = None,
             opacities = opacity,
+            shs = shs,
             scales = scales,
-            rotations = rotations,
-            cov3D_precomp = cov3D_precomp)
+            rotations = rotations)
 
         # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
         # They will be excluded from value updates used in the splitting criteria.

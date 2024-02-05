@@ -13,6 +13,7 @@ from argparse import ArgumentParser, Namespace
 import sys
 import os
 from typing import Any
+import torch
 
 # Global settings class
 class Settings():
@@ -21,11 +22,12 @@ class Settings():
             
             # from old ModelParams 
             "sh_degree" : 3,
-            "dataset_path" : None,
-            "save_path" : None,
+            "dataset_path" : "",
+            "save_path" : "",
             "resolution_scale" : 1.0,
             "white_background" : False,
-            "data_device": "cuda",
+            "device": "cuda" if torch.cuda.is_available() else "cpu",
+            "data_device": "cuda" if torch.cuda.is_available() else "cpu",
 
             # from old OptimizationParams
             "iterations" : 30_000,
@@ -44,9 +46,13 @@ class Settings():
             "densify_from_iter" : 500,
             "densify_until_iter" : 15_000,
             "densify_grad_threshold" : 0.0002,
+            "spatial_lr_scale" : 1.0,
             "random_background" : False
         }
 
+    def keys(self):
+        return self.params.keys()
+    
     def update_argparse(self, parser = None):
         if parser is None:
             parser = ArgumentParser("Gaussian model and training parameters")

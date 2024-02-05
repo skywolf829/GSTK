@@ -1,6 +1,7 @@
 import dearpygui.dearpygui as dpg
+from windows import Window
 
-class TestWindow:
+class TestWindow(Window):
     def __init__(self, tag : str):
         if(dpg.does_item_exist(tag)):
             print(f"{tag} window already exists! Cannot add another.")

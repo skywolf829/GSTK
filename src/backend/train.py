@@ -41,15 +41,17 @@ if __name__ == "__main__":
         settings.save_path = save_path
 
     # Initialize system state (RNG)
-    safe_state(settings.quiet)
+    #safe_state(settings.quiet)
 
     dataset = Dataset(settings)
-    gaussians = GaussianModel(settings)
     settings.spatial_lr_scale = dataset.cameras_extent
-    gaussians.create_from_pcd(dataset.scene_info.point_cloud, settings)
 
-    trainer = Trainer(gaussians, dataset, settings)
-    trainer.training_setup()
+    gaussians = GaussianModel(settings)
+    gaussians.create_from_pcd(dataset.scene_info.point_cloud)
+    
+    trainer = Trainer(gaussians, settings)
+    trainer.set_dataset(dataset)
+
 
     trainer.train_all()
 
