@@ -14,7 +14,7 @@ class RenderWindow(Window):
         self.resizing = True
         self.app_controller.register_message_listener(self, "render")
 
-        self.tex = np.ones([self.max_tex_height, self.max_tex_width, 4], 
+        self.tex = np.zeros([self.max_tex_height, self.max_tex_width, 4], 
                            dtype=np.float32)
 
 
@@ -42,43 +42,21 @@ class RenderWindow(Window):
             dpg.add_mouse_release_handler(callback=self.update_window_size)
 
         dpg.bind_item_handler_registry(self.tag, "render_window_resize_handler")
-        dpg.set_viewport_resize_callback(self.on_resize)
-        
+        dpg.set_viewport_resize_callback(self.on_resize_viewport)
+
     
     def update_window_size(self, force=False):
         if(self.resizing or force):
             h = min(dpg.get_item_height(self.tag), self.max_tex_height)
             w = min(dpg.get_item_width(self.tag), self.max_tex_width)
 
-            print(f"Resizing to {h}x{w}")
+            #print(f"Resizing to {h}x{w}")
             dpg.configure_item("render_view_image", width=w, height=h,
-                               uv_max = (w/self.max_tex_width, h/self.max_tex_height))
+                uv_max = (w/self.max_tex_width, h/self.max_tex_height))
             self.resizing = False
-            self.update_renderer_settings()
+            #if(self.app_controller.renderer_settings_window is not None):
+            #    self.app_controller.renderer_settings_window.update_renderer_settings()
             
-    def update_renderer_settings(self):
-        scaling = dpg.get_value("resolution_scaling")
-        
-        max_width = dpg.get_item_width("render_view_texture")
-        max_height = dpg.get_item_height("render_view_texture")
-        w = int(scaling*min(max_width,dpg.get_item_width("render_window")))
-        h = int(scaling*min(max_height,dpg.get_item_height("render_window")))
-        
-        dpg.set_value("effective_resolution", f"Resolution: {w}x{h}")
-
-        trainer_settings = {
-            "width" : w,
-            "height" : h,
-            "fov_x" : dpg.get_value("fov_x"),
-            "fov_y" : dpg.get_value("fov_y"),
-            "near_plane" : dpg.get_value("near_plane"),
-            "far_plane" : dpg.get_value("far_plane")
-        }
-        data_to_send = {
-            "update_renderer_settings" : trainer_settings
-        }
-        self.app_controller.app_communicator.send_message(data_to_send)
-
     def on_new_image(self, data):
         #print("Updating texture")
         x_dim = min(self.tex.shape[0], data.shape[0])
@@ -101,6 +79,9 @@ class RenderWindow(Window):
     def on_resize(self):
         self.resizing = True
     
+    def on_resize_viewport(self):
+        pass
+
     def receive_message(self, data: dict):
         if("image" in data.keys()):
             img = data['image'].astype(np.float32) / 255

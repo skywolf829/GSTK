@@ -20,15 +20,8 @@ class RenderSettingsWindow(Window):
                                  format='%.2f')
             dpg.add_text("Resolution: ", tag="effective_resolution")
             
-            dpg.add_slider_float(label="FoV x", 
-                               tag="fov_x", 
-                               default_value=70,
-                               min_value=30,
-                               max_value=120,
-                               format= '%.2f'
-                               )
-            dpg.add_slider_float(label="FoV y", 
-                               tag="fov_y", 
+            dpg.add_slider_float(label="Field of view", 
+                               tag="fov", 
                                default_value=70,
                                min_value=30,
                                max_value=120,
@@ -59,20 +52,28 @@ class RenderSettingsWindow(Window):
         max_height = dpg.get_item_height("render_view_texture")
         w = int(scaling*min(max_width,dpg.get_item_width("render_window")))
         h = int(scaling*min(max_height,dpg.get_item_height("render_window")))
-        
+
         dpg.set_value("effective_resolution", f"Resolution: {w}x{h}")
+
+        if(h>w):
+            fovy = dpg.get_value("fov")
+            fovx = dpg.get_value("fov") * w/h
+        else:
+            fovx = dpg.get_value("fov")
+            fovy = dpg.get_value("fov") * h/w
         trainer_settings = {
             "width" : w,
             "height" : h,
-            "fov_x" : dpg.get_value("fov_x"),
-            "fov_y" : dpg.get_value("fov_y"),
+            "fov_x" : fovx,
+            "fov_y" : fovy,
             "near_plane" : dpg.get_value("near_plane"),
             "far_plane" : dpg.get_value("far_plane")
         }
-        data_to_send = {
-            "update_renderer_settings" : trainer_settings
-        }
-        self.app_controller.app_communicator.send_message(data_to_send)
+        if(self.app_controller.app_communicator.connected):
+            data_to_send = {
+                "update_renderer_settings" : trainer_settings
+            }
+            self.app_controller.app_communicator.send_message(data_to_send)
 
     def on_update(self, data):
         self.app_controller.popup_box("Updated renderer settings", data)
@@ -81,10 +82,8 @@ class RenderSettingsWindow(Window):
         self.app_controller.popup_box("Error updating renderer settings", data)
 
     def on_receive_state(self, data):
-        dpg.set_value("res_x", data['image_width'])
-        dpg.set_value("res_y", data['image_width'])
-        dpg.set_value("fov_x", data['fov_x'])
-        dpg.set_value("fov_y", data['fov_y'])
+
+        dpg.set_value("fov", data['fov_x'])
         dpg.set_value("near_plane", data['near_plane'])
         dpg.set_value("far_plane", data['far_plane'])
 

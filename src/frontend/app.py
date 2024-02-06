@@ -3,6 +3,7 @@ import multiprocessing.connection as connection
 import uuid
 import threading
 import multiprocessing
+import time
 
 from windows.MainWindow import MainWindow
 from windows.ServerConnectWindow import ServerConnectWindow
@@ -224,16 +225,14 @@ class AppCommunicator(threading.Thread):
     def run(self):
         while not self.stop:
             if self.conn is not None and self.connected:
-                try:                    
-                    with self.lock:
-                        if(self.conn.poll()):
-                            data = self.conn.recv()
-                            self.app_controller.distribute_message_data(data)
+                try:                   
+                    if(self.conn.poll()):
+                        data = self.conn.recv()
+                        self.app_controller.distribute_message_data(data)
                 except Exception as e:
                     print(e)
                     self.disconnect_from_server()
 
-        self.stop()
 
     # Disconnects and updates the app controller
     def disconnect_from_server(self, popup=True):        
