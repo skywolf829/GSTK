@@ -327,9 +327,14 @@ class Trainer:
             t.set_description(f"[{self._iteration+1}/{self.settings.iterations}] loss: {ema_loss:0.04f}")
     
     def train_threaded(self, server_controller):
+        t0 = time.time()
         while self.training:
             i, last_img, last_loss, ema_last_loss = self.step()
-            if(self._iteration % 25 == 0):
+            if(self._iteration % 100 == 0):
+                t = time.time() - t0
+                print(f"{100/t : 0.02f} updates per second")
+                t0 = time.time()
                 server_controller.on_train_step(self._iteration, 
                                             last_img.detach().cpu().numpy(), 
                                             last_loss, ema_last_loss)
+            

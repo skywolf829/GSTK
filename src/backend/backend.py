@@ -14,6 +14,7 @@ import torch
 import numpy as np
 from dataset.cameras import RenderCam
 import multiprocessing
+#import yappi
 
 def signal_handler(sig, frame):
     pid = os.getpid()
@@ -21,6 +22,8 @@ def signal_handler(sig, frame):
     global server_communicator
     server_communicator.stop = True
     # This is required otherwise the ServerCommunicator will stay listening
+    #yappi.stop()
+    #yappi.get_func_stats(ctx_id=1).print_all()
     os.kill(pid, 9)
     sys.exit(0)
     
@@ -48,8 +51,10 @@ class ServerController:
         server_communicator = ServerCommunicator(self, ip, port)
         server_communicator.start()
 
-        self.render_thread = threading.Thread(target=self.render_loop, args=(), 
-                                              daemon=True)
+        self.render_thread = threading.Thread(target=self.render_loop, 
+                                              args=(), 
+                                              daemon=True,
+                                              name="RenderThread")
         self.render_thread.start()
         
     def process_message(self,data):
@@ -64,19 +69,25 @@ class ServerController:
         
         if("initialize_dataset" in data.keys()):
             t = threading.Thread(target=self.initialize_dataset, 
-                                 args=[data['initialize_dataset']])
+                                 args=[data['initialize_dataset']],
+                                 daemon=True,
+                                 name="InitializeDatasetThread")
             self.loading = True
             t.start()
             
         if("update_trainer_settings" in data.keys()):
             t = threading.Thread(target=self.update_trainer_settings, 
-                                 args=[data['update_trainer_settings']])
+                                 args=[data['update_trainer_settings']],
+                                 daemon=True,
+                                 name="UpdateTrainerSettingsThread")
             self.loading = True            
             t.start()
         
         if("update_model_settings" in data.keys()):
             t = threading.Thread(target=self.update_model_settings, 
-                                 args=[data['update_model_settings']])
+                                 args=[data['update_model_settings']],
+                                 daemon=True,
+                                 name="UpdateModelSettingsThread")
             self.loading = True            
             t.start()
         
@@ -244,16 +255,17 @@ class ServerController:
             self.loading = False
             return
         
-        t = threading.Thread(target = self.trainer.train_threaded,
-                                args=(self,))
+        self.training_thread = threading.Thread(target = self.trainer.train_threaded,
+                                args=(self,), daemon=True, name="TrainingThread")
         self.trainer.training = True
-        t.start()
+        self.training_thread.start()
         data = {
             "trainer": {"training_started": True}
         }
         server_communicator.send_message(data)
         self.loading = False
-        
+        #server_communicator.disconnect()
+
     def on_train_pause(self):
         global server_communicator
         self.loading = True
@@ -266,6 +278,7 @@ class ServerController:
             return
         
         self.trainer.training = False
+        
         data = {
             "trainer": {"training_paused": True}
         }
@@ -324,32 +337,31 @@ class ServerController:
         global server_communicator
         t0 = time.time()
         frames = 0
-        with torch.no_grad():
-            while self.renderer_enabled:
-                if(server_communicator.state == "connected" and not self.loading):
-                    if(self.model.initialized):
-                        render_package = self.model.render(self.render_cam)
-                        server_communicator.send_message(
-                            { "render": {
-                                "image" :
-                                    (torch.clamp(render_package['render'], min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy()
-                                }
+        while self.renderer_enabled:
+            if(server_communicator.state == "connected" and not self.loading):
+                if(self.model.initialized):
+                    render_package = self.model.render(self.render_cam)
+                    server_communicator.send_message(
+                        { "render": {
+                            "image" :
+                                (torch.clamp(render_package['render'], min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy()
                             }
-                        )
-                        frames += 1
-                        t = time.time() - t0
-                        if(t > 1.0):
-                            fps = frames / t
-                            #print(f"FPS: {fps:0.02f}")
-                            frames = 0
-                            t0 = time.time()
-                else:
-                    time.sleep(1.0)
+                        }
+                    )
+                    frames += 1
+                    t = time.time() - t0
+                    if(t > 1.0):
+                        fps = frames / t
+                        print(f"FPS: {fps:0.02f}")
+                        frames = 0
+                        t0 = time.time()
+            else:
+                time.sleep(1.0)
 
 class ServerCommunicator(threading.Thread):
 
     def __init__(self, server_controller : ServerController, ip : str, port: int, *args, **kwargs): 
-        super().__init__().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs, daemon=True, name="ServerCommunicatorThread")
 
         self.state = "uninitialized"        
         self.server_controller = server_controller
@@ -380,7 +392,8 @@ class ServerCommunicator(threading.Thread):
                 data = self.check_for_msg()
                 if data is not None:
                     self.server_controller.process_message(data)
-
+            time.sleep(0.1)
+            
         print("Stop signal detected")
         # clean up
         if(self.conn):
@@ -390,23 +403,23 @@ class ServerCommunicator(threading.Thread):
 
         self.conn = None
         self.listener = None
-        self.stop()
-            
+
+    def disconnect(self):
+        self.state = "uninitialized"
+        self.conn.close()
+        self.listener.close()
+
     def check_for_msg(self):
-        with self.lock:
-            try:
-                # poll tells us if there is a message ready
-                if(self.conn.poll()):
-                    # Blocking call, will wait here
-                    item = self.conn.recv()
-                else:
-                    item = None
-            except Exception:
-                print(f"Connection closed")
-                self.state = "uninitialized"
-                self.conn.close()
-                self.listener.close()
-                item = None
+        item = None
+        try:
+            # poll tells us if there is a message ready
+            if(self.conn.poll()):
+                # Blocking call, will wait here
+                item = self.conn.recv()
+        except Exception:
+            print(f"Connection closed")
+            self.disconnect()
+            item = None
         return item
 
     def send_message(self, data):
@@ -428,6 +441,7 @@ if __name__ == "__main__":
     parser.add_argument('--ip', type=str, default="127.0.0.1")
     parser.add_argument('--port', type=int, default=10789)
     args = parser.parse_args()
+    #yappi.start()
 
     s = ServerController(args.ip, args.port)
 
