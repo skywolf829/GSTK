@@ -16,6 +16,7 @@ class RenderWindow(Window):
 
         self.tex = np.zeros([self.max_tex_height, self.max_tex_width, 4], 
                            dtype=np.float32)
+        self.tex[:,:,-1] = 1
 
 
         with dpg.texture_registry(show=False):
@@ -59,6 +60,7 @@ class RenderWindow(Window):
             
     def on_new_image(self, data):
         #print("Updating texture")
+        data = data.astype(np.float32) / 255.
         x_dim = min(self.tex.shape[0], data.shape[0])
         y_dim = min(self.tex.shape[1], data.shape[1])
         z_dim = min(self.tex.shape[2], data.shape[2])
@@ -84,5 +86,5 @@ class RenderWindow(Window):
 
     def receive_message(self, data: dict):
         if("image" in data.keys()):
-            img = data['image'].astype(np.float32) / 255
+            img = data['image']
             self.on_new_image(img)
