@@ -257,8 +257,9 @@ class AppCommunicator(threading.Thread):
                 self.disconnect_from_server(popup=False)
                 self.app_controller.popup_box("Error", "Server disconnected.")
         else:
-            self.app_controller.popup_box("Error", 
-                "Attempted to send message before connecting to server.")
+            #self.app_controller.popup_box("Error", 
+            #    "Attempted to send message before connecting to server.")
+            pass
 
 if __name__ == "__main__":
     a = AppController()

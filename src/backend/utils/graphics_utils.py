@@ -70,6 +70,18 @@ def getProjectionMatrix(znear, zfar, fovX, fovY, device="cuda"):
     P[2, 3] = -(zfar * znear) / (zfar - znear)
     return P
 
+def rotate_axis_angle(axis : torch.tensor, angle:float):
+    # https://en.wikipedia.org/wiki/Rotation_matrix#Rotation_matrix_from_axis_and_angle
+    axis_norm = axis / torch.norm(axis)
+
+    cosI = np.cos(angle)*torch.eye(3, device=axis.device)
+    sin_part = torch.tensor([[  0.,             -axis_norm[2],  axis_norm[1]],
+                                [  axis_norm[2],   0.,             -axis_norm[0]],
+                                [  -axis_norm[1],  axis_norm[0],   0.]], device=axis.device) * np.sin(angle)
+    outer = (1-np.cos(angle)) * torch.outer(axis, axis)
+
+    return cosI + sin_part + outer
+    
 def fov2focal(fov, pixels):
     return pixels / (2 * math.tan(fov / 2))
 

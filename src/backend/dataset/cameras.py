@@ -12,7 +12,7 @@
 import torch
 from torch import nn
 import numpy as np
-from utils.graphics_utils import getWorld2View2, getProjectionMatrix
+from utils.graphics_utils import getWorld2View2, getProjectionMatrix, rotate_axis_angle
 
 class Camera(nn.Module):
     def __init__(self, colmap_id, 
@@ -95,10 +95,27 @@ class RenderCam:
         self.T = T
         self.R = R
 
+        self.mode = "arcball"
+
     @property
     def world_view_transform(self):
-        return torch.tensor(getWorld2View2(self.R, self.T), 
-                            device=self.data_device).transpose(0, 1)
+        t = torch.empty([4,4], dtype=torch.float32, device=self.data_device)
+        t[:3, :3] = self.R.T
+        t[:3, 3] = self.T
+        t[3, 3] = 1.
+        return t.T
+    
+    @property
+    def up(self):
+        return self.R[:3, 1] / torch.norm(self.R[:3, 1])
+    
+    @property
+    def right(self):
+        return self.R[:3, 0] / torch.norm(self.R[:3, 0])
+    
+    @property
+    def forward(self):
+        return self.R[:3, 2] / torch.norm(self.R[:3, 2])
     
     @property
     def full_proj_transform(self):
@@ -111,3 +128,20 @@ class RenderCam:
     @property
     def camera_center(self):
         return torch.tensor(self.T, device=self.data_device)
+    
+    def process_mouse_input(self, dx, dy, modifiers = []):
+        if(self.mode == "arcball"):
+            self.process_mouse_input_arcball(dx, dy, modifiers)
+
+    def process_mouse_input_arcball(self, dx, dy, modifiers=[]):
+
+        if len(modifiers) == 0:
+            # rotation
+
+            # rotate from dx first (about y axis)
+            angle = 2 * np.pi * dx / self.image_width
+            self.R = rotate_axis_angle(self.up, angle)
+
+            # rotate from dy about x axis
+            angle = 2 * np.pi * dy / self.image_height
+            self.R = rotate_axis_angle(self.right, angle)

@@ -103,6 +103,12 @@ class ServerController:
 
         if("debug" in data.keys()):
             self.on_debug_toggle(data['debug'])
+
+        if("camera_move" in data.keys()):
+            self.render_cam.process_mouse_input(
+                data['camera_move']['dx'],
+                data['camera_move']['dy'],
+                data['camera_move']['modifiers'])
             
     def initialize_dataset(self, data):
         global server_communicator

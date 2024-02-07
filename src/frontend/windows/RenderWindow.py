@@ -41,12 +41,16 @@ class RenderWindow(Window):
             dpg.add_item_resize_handler(callback=self.on_resize)
         
         with dpg.handler_registry(show=True):
-            dpg.add_mouse_release_handler(callback=self.update_window_size)
+            dpg.add_mouse_release_handler(callback=self.on_mouse_release)
+            dpg.add_mouse_click_handler(callback=self.on_mouse_click)
+            dpg.add_mouse_drag_handler(callback=self.on_mouse_drag, threshold=5)
 
         dpg.bind_item_handler_registry(self.tag, "render_window_resize_handler")
         dpg.set_viewport_resize_callback(self.on_resize_viewport)
 
-    
+        self.last_dx = 0
+        self.last_dy = 0
+  
     def update_window_size(self, force=False):
         if(self.resizing or force):
             h = min(dpg.get_item_height(self.tag), self.max_tex_height)
@@ -85,6 +89,31 @@ class RenderWindow(Window):
     def on_resize(self):
         self.resizing = True
     
+    def on_mouse_click(self):
+        pass
+
+    def on_mouse_drag(self, button, direction):
+        dx = direction[1] - self.last_dx
+        dy = -(direction[2] - self.last_dy)
+        modifiers = []
+        
+        self.app_controller.app_communicator.send_message(
+            {"camera_move":
+                {
+                    "dx": dx,
+                    "dy": dy,
+                    "modifiers": modifiers
+                }
+             }
+        )
+        self.last_dx = direction[1]
+        self.last_dy = direction[2]
+
+    def on_mouse_release(self):
+        self.update_window_size()
+        self.last_dx=0
+        self.last_dy=0
+        
     def on_resize_viewport(self):
         pass
 
