@@ -2,6 +2,7 @@ import dearpygui.dearpygui as dpg
 from windows import Window
 import numpy as np
 import time
+import cv2
 
 class RenderWindow(Window):
     def __init__(self, app_controller):
@@ -60,7 +61,10 @@ class RenderWindow(Window):
             
     def on_new_image(self, data):
         #print("Updating texture")
+        data = np.frombuffer(data, dtype=np.byte)
+        data = cv2.imdecode(data, cv2.IMREAD_COLOR)
         data = data.astype(np.float32) / 255.
+
         x_dim = min(self.tex.shape[0], data.shape[0])
         y_dim = min(self.tex.shape[1], data.shape[1])
         z_dim = min(self.tex.shape[2], data.shape[2])

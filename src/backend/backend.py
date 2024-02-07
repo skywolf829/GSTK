@@ -14,6 +14,7 @@ import torch
 import numpy as np
 from dataset.cameras import RenderCam
 import multiprocessing
+import cv2
 #import yappi
 
 def signal_handler(sig, frame):
@@ -341,10 +342,13 @@ class ServerController:
             if(server_communicator.state == "connected" and not self.loading):
                 if(self.model.initialized):
                     render_package = self.model.render(self.render_cam)
+                    img = torch.clamp(render_package['render'], min=0, max=1.0) * 255
+                    img_npy = img.byte().permute(1, 2, 0).contiguous().cpu().numpy()
+                    _, img_jpeg = cv2.imencode(".jpeg", img_npy)
                     server_communicator.send_message(
                         { "render": {
                             "image" :
-                                (torch.clamp(render_package['render'], min=0, max=1.0) * 255).byte().permute(1, 2, 0).contiguous().cpu().numpy()
+                                img_jpeg.tobytes()
                             }
                         }
                     )
