@@ -60,8 +60,8 @@ class ServerController:
         
     def process_message(self,data):
         global server_communicator
-        print("Received message")
-        print(data)
+        #print("Received message")
+        #print(data)
         if(self.loading):
             data = {"other" : {"error": "Please wait until the current operation is completed"}}
             server_communicator.send_message(data)
@@ -105,10 +105,8 @@ class ServerController:
             self.on_debug_toggle(data['debug'])
 
         if("camera_move" in data.keys()):
-            self.render_cam.process_mouse_input(
-                data['camera_move']['dx'],
-                data['camera_move']['dy'],
-                data['camera_move']['modifiers'])
+            self.render_cam.process_camera_move(
+                data['camera_move'])
             
     def initialize_dataset(self, data):
         global server_communicator
@@ -402,7 +400,7 @@ class ServerCommunicator(threading.Thread):
                 data = self.check_for_msg()
                 if data is not None:
                     self.server_controller.process_message(data)
-            time.sleep(0.1)
+            #time.sleep(0.0001)
             
         print("Stop signal detected")
         # clean up

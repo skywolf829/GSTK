@@ -80,9 +80,9 @@ class MiniCam:
 class RenderCam:
     def __init__(self, 
                  width=800, height=800, 
-                 fovy=65., fovx=65., 
+                 fovy=np.pi*(120/180), fovx=np.pi*(120/180), 
                  znear=0.01, zfar=100.0,
-                 T=np.array([0.,0.,0.], dtype=np.float32),
+                 T=np.array([00.,00.,2.], dtype=np.float32),
                  R=np.eye(3, dtype=np.float32),
                  device = "cuda" if torch.cuda.is_available() else "cpu"):
         self.data_device = device
@@ -92,56 +92,82 @@ class RenderCam:
         self.FoVx : float = fovx
         self.znear : float = znear
         self.zfar : float = zfar
-        self.T = T
-        self.R = R
-
+        self.T : np.ndarray = T
+        self.R : np.ndarray = R
+        self.COI : np.ndarray = np.zeros([3], dtype=np.float32)
         self.mode = "arcball"
 
     @property
     def world_view_transform(self):
-        t = torch.empty([4,4], dtype=torch.float32, device=self.data_device)
-        t[:3, :3] = self.R.T
-        t[:3, 3] = self.T
+        t = np.zeros([4,4], dtype=np.float32)
+        t[:3, :3] = self.R
+        t[3, :3] = self.T
         t[3, 3] = 1.
-        return t.T
+        return torch.tensor(t, device=self.data_device)
+    
+    @property
+    def COI_view_transform(self):
+        t = np.zeros([4,4], dtype=np.float32)
+        t[:3, :3] = self.R
+        t[3, :3] = self.T - self.COI
+        t[3, 3] = 1.
+        return torch.tensor(t, device=self.data_device)
     
     @property
     def up(self):
-        return self.R[:3, 1] / torch.norm(self.R[:3, 1])
+        return self.R[:3, 1] / np.linalg.norm(self.R[:3, 1])
     
     @property
     def right(self):
-        return self.R[:3, 0] / torch.norm(self.R[:3, 0])
+        return -self.R[:3, 0] / np.linalg.norm(self.R[:3, 0])
     
     @property
     def forward(self):
-        return self.R[:3, 2] / torch.norm(self.R[:3, 2])
+        return -self.R[:3, 2] / np.linalg.norm(self.R[:3, 2])
     
-    @property
-    def full_proj_transform(self):
+    @property 
+    def projection_matrix(self):
         return getProjectionMatrix(znear=self.znear, 
                             zfar=self.zfar, 
                             fovX=self.FoVx, 
                             fovY=self.FoVy,
-                            device=self.data_device).transpose(0,1)
+                            device=self.data_device).T
+
+    @property
+    def full_proj_transform(self):
+        return self.world_view_transform @ \
+                self.projection_matrix
     
     @property
     def camera_center(self):
-        return torch.tensor(self.T, device=self.data_device)
+        return self.world_view_transform.inverse()[3, :3]
     
-    def process_mouse_input(self, dx, dy, modifiers = []):
+    def process_camera_move(self, data):
         if(self.mode == "arcball"):
-            self.process_mouse_input_arcball(dx, dy, modifiers)
+            if("mouse_move" in data.keys()):
+                self.process_mouse_input_arcball(
+                    data['mouse_move']['dx'], data['mouse_move']['dy'], data['mouse_move']['modifiers']
+                    )
+            if("key_pressed" in data.keys()):
+                self.process_key_input_test(data['key_pressed']['right'], data['key_pressed']['up'])
+
+    def process_key_input_test(self, right, up):
+        self.T[0] += 0.2 * right
+        self.COI[0] += 0.2 * right
+        self.T[1] += 0.2 * up
+        self.COI[1] += 0.2 * up
 
     def process_mouse_input_arcball(self, dx, dy, modifiers=[]):
 
         if len(modifiers) == 0:
             # rotation
 
-            # rotate from dx first (about y axis)
-            angle = 2 * np.pi * dx / self.image_width
-            self.R = rotate_axis_angle(self.up, angle)
+            angle1 = 2 * np.pi * dx / self.image_width
+            angle2 = 2 * np.pi * dy / self.image_height
+            r1 = rotate_axis_angle(self.up, angle1)
+            r2 = rotate_axis_angle(self.right, angle2)
 
-            # rotate from dy about x axis
-            angle = 2 * np.pi * dy / self.image_height
-            self.R = rotate_axis_angle(self.right, angle)
+            self.R = (r1 @ r2 @ self.R)
+            #self.T = (r1 @ r2 @ (self.T[:,None] - self.COI))[:,0] + self.COI
+
+        

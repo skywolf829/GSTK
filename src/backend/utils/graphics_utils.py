@@ -70,17 +70,24 @@ def getProjectionMatrix(znear, zfar, fovX, fovY, device="cuda"):
     P[2, 3] = -(zfar * znear) / (zfar - znear)
     return P
 
-def rotate_axis_angle(axis : torch.tensor, angle:float):
+def rotate_axis_angle(axis : np.ndarray, angle:float, full=False):
     # https://en.wikipedia.org/wiki/Rotation_matrix#Rotation_matrix_from_axis_and_angle
-    axis_norm = axis / torch.norm(axis)
+    axis_norm = axis / np.linalg.norm(axis)
 
-    cosI = np.cos(angle)*torch.eye(3, device=axis.device)
-    sin_part = torch.tensor([[  0.,             -axis_norm[2],  axis_norm[1]],
+    cosI = np.cos(angle)*np.eye(3, dtype=np.float32)
+    sin_part = np.array([[  0.,             -axis_norm[2],  axis_norm[1]],
                                 [  axis_norm[2],   0.,             -axis_norm[0]],
-                                [  -axis_norm[1],  axis_norm[0],   0.]], device=axis.device) * np.sin(angle)
-    outer = (1-np.cos(angle)) * torch.outer(axis, axis)
+                                [  -axis_norm[1],  axis_norm[0],   0.]], dtype=np.float32) * np.sin(angle)
+    outer = (1-np.cos(angle)) * np.outer(axis, axis)
 
-    return cosI + sin_part + outer
+    val = cosI + sin_part + outer
+    if(full):
+        mat = np.zeros([4,4], dtype=np.float32)
+        mat[0:3, 0:3] = val
+        mat[3, 3] = 1.
+        return mat
+    else:
+        return val
     
 def fov2focal(fov, pixels):
     return pixels / (2 * math.tan(fov / 2))

@@ -45,6 +45,8 @@ class RenderWindow(Window):
             dpg.add_mouse_click_handler(callback=self.on_mouse_click)
             dpg.add_mouse_drag_handler(callback=self.on_mouse_drag, threshold=5)
 
+            dpg.add_key_press_handler(callback=self.on_key_press)
+            dpg.mvKey_Left
         dpg.bind_item_handler_registry(self.tag, "render_window_resize_handler")
         dpg.set_viewport_resize_callback(self.on_resize_viewport)
 
@@ -92,7 +94,9 @@ class RenderWindow(Window):
     def on_mouse_click(self):
         pass
 
-    def on_mouse_drag(self, button, direction):
+    def on_mouse_drag(self, usr_data, direction):
+        if(not dpg.is_item_focused(self.tag)):
+            return
         dx = direction[1] - self.last_dx
         dy = -(direction[2] - self.last_dy)
         modifiers = []
@@ -100,10 +104,11 @@ class RenderWindow(Window):
         self.app_controller.app_communicator.send_message(
             {"camera_move":
                 {
+                "mouse_move": {
                     "dx": dx,
                     "dy": dy,
                     "modifiers": modifiers
-                }
+                }}
              }
         )
         self.last_dx = direction[1]
@@ -116,6 +121,30 @@ class RenderWindow(Window):
         
     def on_resize_viewport(self):
         pass
+
+    def on_key_press(self, user_data, key_code):
+        if(not dpg.is_item_focused(self.tag)):
+            return
+        right = 0
+        up = 0
+        if(key_code == dpg.mvKey_Left):
+            right -= 1
+        if(key_code == dpg.mvKey_Right):
+            right += 1
+        if(key_code == dpg.mvKey_Up):
+            up += 1
+        if(key_code == dpg.mvKey_Down):
+            up -= 1
+
+        self.app_controller.app_communicator.send_message(
+            {"camera_move":
+                {
+                "key_pressed": {
+                    "up": up,
+                    "right": right
+                }}
+             }
+        )
 
     def receive_message(self, data: dict):
         if("image" in data.keys()):
