@@ -18,7 +18,7 @@ class RenderWindow(Window):
         self.tex = np.zeros([self.max_tex_height, self.max_tex_width, 4], 
                            dtype=np.float32)
         self.tex[:,:,-1] = 1
-
+        self.modifiers = []
 
         with dpg.texture_registry(show=False):
             dpg.add_raw_texture(width=self.max_tex_width, 
@@ -41,17 +41,21 @@ class RenderWindow(Window):
             dpg.add_item_resize_handler(callback=self.on_resize)
         
         with dpg.handler_registry(show=True):
-            dpg.add_mouse_release_handler(callback=self.on_mouse_release)
-            dpg.add_mouse_click_handler(callback=self.on_mouse_click)
-            dpg.add_mouse_drag_handler(callback=self.on_mouse_drag, threshold=5)
+            dpg.add_mouse_release_handler(callback=self.on_mouse_left_release, button=dpg.mvMouseButton_Left)
+            dpg.add_mouse_click_handler(callback=self.on_mouse_left_click, button=dpg.mvMouseButton_Left)
+            dpg.add_mouse_drag_handler(callback=self.on_mouse_left_drag, button=dpg.mvMouseButton_Left, threshold=5)
 
-            dpg.add_key_press_handler(callback=self.on_key_press)
-            dpg.mvKey_Left
+            dpg.add_key_down_handler(callback=self.on_key_down)
+            dpg.add_key_release_handler(callback=self.on_key_release)
+
+            dpg.add_mouse_wheel_handler(callback=self.on_mouse_wheel)
+            
         dpg.bind_item_handler_registry(self.tag, "render_window_resize_handler")
         dpg.set_viewport_resize_callback(self.on_resize_viewport)
 
         self.last_dx = 0
         self.last_dy = 0
+        
   
     def update_window_size(self, force=False):
         if(self.resizing or force):
@@ -91,30 +95,28 @@ class RenderWindow(Window):
     def on_resize(self):
         self.resizing = True
     
-    def on_mouse_click(self):
+    def on_mouse_left_click(self):
         pass
 
-    def on_mouse_drag(self, usr_data, direction):
+    def on_mouse_left_drag(self, usr_data, direction):
         if(not dpg.is_item_focused(self.tag)):
             return
         dx = direction[1] - self.last_dx
         dy = -(direction[2] - self.last_dy)
-        modifiers = []
-        
         self.app_controller.app_communicator.send_message(
             {"camera_move":
                 {
                 "mouse_move": {
                     "dx": dx,
                     "dy": dy,
-                    "modifiers": modifiers
+                    "modifiers": self.modifiers
                 }}
              }
         )
         self.last_dx = direction[1]
         self.last_dy = direction[2]
 
-    def on_mouse_release(self):
+    def on_mouse_left_release(self):
         self.update_window_size()
         self.last_dx=0
         self.last_dy=0
@@ -122,9 +124,11 @@ class RenderWindow(Window):
     def on_resize_viewport(self):
         pass
 
-    def on_key_press(self, user_data, key_code):
+    def on_key_down(self, user_data, key_code_data):
         if(not dpg.is_item_focused(self.tag)):
             return
+        key_code = key_code_data[0]
+        t = key_code_data[1]
         right = 0
         up = 0
         if(key_code == dpg.mvKey_Left):
@@ -135,14 +139,42 @@ class RenderWindow(Window):
             up += 1
         if(key_code == dpg.mvKey_Down):
             up -= 1
+            
+        if(key_code == dpg.mvKey_Control and "control" not in self.modifiers):
+            self.modifiers.append("control")
+        if(key_code == dpg.mvKey_Shift and "shift" not in self.modifiers):
+            self.modifiers.append("shift")
+        if(key_code == dpg.mvKey_Alt and "alt" not in self.modifiers):
+            self.modifiers.append("alt")
 
+
+        if(up != 0 or right != 0):
+            self.app_controller.app_communicator.send_message(
+                {"camera_move":
+                    {
+                    "key_pressed": {
+                        "up": up,
+                        "right": right
+                    }}
+                }
+            )
+
+    def on_key_release(self, user_data, key_code):
+        if(key_code == dpg.mvKey_Control and "control" in self.modifiers):
+            self.modifiers.remove("control")
+        if(key_code == dpg.mvKey_Shift and "shift" in self.modifiers):
+            self.modifiers.remove("shift")
+        if(key_code == dpg.mvKey_Alt and "alt" in self.modifiers):
+            self.modifiers.remove("alt")
+
+    def on_mouse_wheel(self, user_data, data):
         self.app_controller.app_communicator.send_message(
             {"camera_move":
                 {
-                "key_pressed": {
-                    "up": up,
-                    "right": right
-                }}
+                "scrollwheel": {
+                    "val": data
+                }
+                }
              }
         )
 

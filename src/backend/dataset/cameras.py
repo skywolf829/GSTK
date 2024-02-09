@@ -101,18 +101,11 @@ class RenderCam:
     def world_view_transform(self):
         t = np.zeros([4,4], dtype=np.float32)
         t[:3, :3] = self.R
-        t[3, :3] = self.T
+        COI_local = (np.linalg.inv(self.R) @ self.COI[:,None])[:,0]
+        t[3, :3] = self.T + COI_local
         t[3, 3] = 1.
         return torch.tensor(t, device=self.data_device)
-    
-    @property
-    def COI_view_transform(self):
-        t = np.zeros([4,4], dtype=np.float32)
-        t[:3, :3] = self.R
-        t[3, :3] = self.T - self.COI
-        t[3, 3] = 1.
-        return torch.tensor(t, device=self.data_device)
-    
+        
     @property
     def up(self):
         return self.R[:3, 1] / np.linalg.norm(self.R[:3, 1])
@@ -150,12 +143,16 @@ class RenderCam:
                     )
             if("key_pressed" in data.keys()):
                 self.process_key_input_test(data['key_pressed']['right'], data['key_pressed']['up'])
+            if("scrollwheel" in data.keys()):
+                self.process_scrollwheel(data["scrollwheel"]["val"])
+
+    def process_scrollwheel(self, val):
+        r = 1 - (val/10.)
+        self.T *= r
 
     def process_key_input_test(self, right, up):
-        self.T[0] += 0.2 * right
-        self.COI[0] += 0.2 * right
-        self.T[1] += 0.2 * up
-        self.COI[1] += 0.2 * up
+        world_space_change = 0.2 * right * self.right + 0.2 * up * self.up
+        self.COI += world_space_change
 
     def process_mouse_input_arcball(self, dx, dy, modifiers=[]):
 
@@ -165,9 +162,13 @@ class RenderCam:
             angle1 = 2 * np.pi * dx / self.image_width
             angle2 = 2 * np.pi * dy / self.image_height
             r1 = rotate_axis_angle(self.up, angle1)
-            r2 = rotate_axis_angle(self.right, angle2)
+            r2 = rotate_axis_angle(-self.right, angle2)
 
             self.R = (r1 @ r2 @ self.R)
             #self.T = (r1 @ r2 @ (self.T[:,None] - self.COI))[:,0] + self.COI
+        if (len(modifiers) == 1 and "shift" in modifiers):
+            # pan
+            world_space_change = 5*(-dx/self.image_width)*self.right + 5*(-dy/self.image_height)*self.up
+            self.COI += world_space_change
 
         
