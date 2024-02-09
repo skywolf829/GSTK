@@ -168,7 +168,9 @@ class RenderCam:
             #self.T = (r1 @ r2 @ (self.T[:,None] - self.COI))[:,0] + self.COI
         if (len(modifiers) == 1 and "shift" in modifiers):
             # pan
-            world_space_change = 5*(-dx/self.image_width)*self.right + 5*(-dy/self.image_height)*self.up
+            f = np.linalg.norm(self.T)
+            world_space_change = 2.5*f*(-dx/self.image_width)*self.right + \
+                2.5*f*(-dy/self.image_height)*self.up
             self.COI += world_space_change
 
         
