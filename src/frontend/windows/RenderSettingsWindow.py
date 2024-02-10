@@ -83,7 +83,7 @@ class RenderSettingsWindow(Window):
 
     def on_receive_state(self, data):
 
-        dpg.set_value("fov", data['fov_x'])
+        dpg.set_value("fov", data['fov'])
         dpg.set_value("near_plane", data['near_plane'])
         dpg.set_value("far_plane", data['far_plane'])
 
@@ -92,3 +92,5 @@ class RenderSettingsWindow(Window):
             self.on_update(data['renderer_settings_updated'])
         if "renderer_settings_updated_error" in data.keys():
             self.on_update_error(data['renderer_settings_updated_error'])
+        if("settings_state" in data.keys()):
+            self.on_receive_state(data['settings_state'])

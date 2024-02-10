@@ -183,8 +183,6 @@ class AppController:
             self.debug_window.update_debug_val(data['debug'])
         if('dataset_loaded' in data.keys()):
             self.dataset_window.update_dataset_loaded_val(data['dataset_loaded'])
-        if("render" in data.keys()):
-            self.renderer_settings_window.update_renderer_settings(data['renderer_settings'])
 
 
 class AppCommunicator(threading.Thread):
@@ -232,7 +230,6 @@ class AppCommunicator(threading.Thread):
                 except Exception as e:
                     print(e)
                     self.disconnect_from_server()
-
 
     # Disconnects and updates the app controller
     def disconnect_from_server(self, popup=True):        

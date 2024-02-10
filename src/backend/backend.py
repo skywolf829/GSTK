@@ -48,6 +48,10 @@ class ServerController:
         self.renderer_enabled = True
         self.DEBUG = False
 
+        # < 0.5 is more preference to rendering, > 0.5 is more preference to training
+        self.render_balance = 0.5 
+        self.training_balance = 0.5
+
         global server_communicator
         server_communicator = ServerCommunicator(self, ip, port)
         server_communicator.start()
@@ -57,6 +61,11 @@ class ServerController:
                                               daemon=True,
                                               name="RenderThread")
         self.render_thread.start()
+
+        self.average_training_time = 0
+        self.average_rendering_time = 0
+        self.last_train_step_time = 0
+
         
     def process_message(self,data):
         global server_communicator
@@ -292,14 +301,24 @@ class ServerController:
 
     def on_train_step(self, iteration, img, loss, ema_loss):
         global server_communicator
+        t = time.time()
+        t_passed = t - self.last_train_step_time
+        self.average_training_time = self.average_training_time*0.4 + t_passed*0.6
         data = {"trainer": {"step": {
             "iteration": iteration,
             "max_iteration": self.settings.iterations,
             "loss": loss,
-            "ema_loss": ema_loss
+            "ema_loss": ema_loss,
+            "update_time": self.average_training_time
             }}
         }
         server_communicator.send_message(data)
+        self.last_train_step_time = time.time()
+        update_render_time = self.average_rendering_time + self.average_training_time
+        p_step = self.average_training_time / update_render_time
+        diff = self.training_balance - p_step
+        if(diff > 0):
+            time.sleep(diff * update_render_time)
 
     def on_debug_toggle(self, val):
         global server_communicator
@@ -319,50 +338,55 @@ class ServerController:
     def on_connect(self):
         global server_communicator
         # Send messages for each of the objects to send settings state for
-        data = {"other": {"settings_state": self.settings.params, 
-                          "debug": self.DEBUG,
-                          "dataset_loaded": self.dataset is not None,
-                          "renderer_settings": {
-                              "image_width": self.render_cam.image_width,
-                              "image_height": self.render_cam.image_height,
-                              "fov_x": self.render_cam.FoVx,
-                              "fov_y": self.render_cam.FoVy,
-                              "near_plane": self.render_cam.znear,
-                              "far_plane": self.render_cam.zfar,
-                          }
-                          },
-                "trainer": {"step": {"iteration": self.trainer._iteration,
-                                     "max_iteration": self.settings.iterations,
-                                     "loss": self.trainer.last_loss,
-                                     "ema_loss": self.trainer.ema_loss}}
+        data =  {
+            "other": {
+                "settings_state": self.settings.params, 
+                "debug": self.DEBUG,
+                "dataset_loaded": self.dataset is not None,
+            },
+            "trainer": {
+                "step": {
+                    "iteration": self.trainer._iteration,
+                    "max_iteration": self.settings.iterations,
+                    "loss": self.trainer.last_loss,
+                    "ema_loss": self.trainer.ema_loss
                 }
+            },
+            "renderer": {
+                "settings_state":{
+                    "fov": self.render_cam.FoVx * 180. / np.pi,
+                    "near_plane": self.render_cam.znear,
+                    "far_plane": self.render_cam.zfar
+                }
+            }                  
+        }
         server_communicator.send_message(data)
         
     def render_loop(self):
         global server_communicator
-        t0 = time.time()
-        frames = 0
         while self.renderer_enabled:
             if(server_communicator.state == "connected" and not self.loading):
                 if(self.model.initialized):
+                    t0 = time.time()
                     render_package = self.model.render(self.render_cam)
                     img = torch.clamp(render_package['render'], min=0, max=1.0) * 255
                     img_npy = img.byte().permute(1, 2, 0).contiguous().cpu().numpy()
                     _, img_jpeg = cv2.imencode(".jpeg", img_npy)
+                    t = time.time() - t0
+                    self.average_rendering_time = self.average_rendering_time*0.4 + t*0.6
                     server_communicator.send_message(
                         { "render": {
-                            "image" :
-                                img_jpeg.tobytes()
+                            "image" : img_jpeg.tobytes(),
+                            "update_time": self.average_rendering_time
                             }
                         }
                     )
-                    frames += 1
-                    t = time.time() - t0
-                    if(t > 1.0):
-                        fps = frames / t
-                        print(f"FPS: {fps:0.02f}")
-                        frames = 0
-                        t0 = time.time()
+                    update_render_time = self.average_rendering_time + self.average_training_time
+                    p_render = self.average_rendering_time / update_render_time
+                    diff = self.render_balance -  p_render
+                    if(diff > 0):
+                        time.sleep(diff * update_render_time)
+
             else:
                 time.sleep(1.0)
 
