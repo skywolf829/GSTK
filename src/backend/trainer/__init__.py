@@ -330,11 +330,7 @@ class Trainer:
         t0 = time.time()
         while self.training:
             i, last_img, last_loss, ema_last_loss = self.step()
-            if(self._iteration % 100 == 0):
-                t = time.time() - t0
-                print(f"{100/t : 0.02f} updates per second")
-                t0 = time.time()
-                server_controller.on_train_step(self._iteration, 
-                                            last_img.detach().cpu().numpy(), 
-                                            last_loss, ema_last_loss)
+            server_controller.on_train_step(self._iteration, 
+                                        last_img.detach().cpu().numpy(), 
+                                        last_loss, ema_last_loss)
             

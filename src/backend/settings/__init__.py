@@ -24,7 +24,7 @@ class Settings():
             "sh_degree" : 3,
             "dataset_path" : "",
             "save_path" : "",
-            "resolution_scale" : 1.0,
+            "resolution_scale" : -1,
             "white_background" : False,
             "device": "cuda" if torch.cuda.is_available() else "cpu",
             "data_device": "cuda" if torch.cuda.is_available() else "cpu",

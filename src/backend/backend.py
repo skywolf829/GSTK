@@ -65,8 +65,7 @@ class ServerController:
         self.average_training_time = 0
         self.average_rendering_time = 0
         self.last_train_step_time = 0
-
-        
+       
     def process_message(self,data):
         global server_communicator
         #print("Received message")
@@ -257,6 +256,8 @@ class ServerController:
         self.render_cam.FoVy = np.deg2rad(data['fov_y'])
         self.render_cam.znear = data['near_plane']
         self.render_cam.zfar = data['far_plane']
+        self.render_balance = np.clip(data['balance'], 0., 1.)
+        self.training_balance = 1 - self.render_balance
 
     def on_train_start(self):
         global server_communicator
@@ -269,9 +270,10 @@ class ServerController:
             self.loading = False
             return
         
-        self.training_thread = threading.Thread(target = self.trainer.train_threaded,
-                                args=(self,), daemon=True, name="TrainingThread")
+        self.training_thread = threading.Thread(target = self.train_loop,
+                                args=(), daemon=True, name="TrainingThread")
         self.trainer.training = True
+        self.last_train_step_time = time.time()
         self.training_thread.start()
         data = {
             "trainer": {"training_started": True}
@@ -279,6 +281,36 @@ class ServerController:
         server_communicator.send_message(data)
         self.loading = False
         #server_communicator.disconnect()
+
+    def train_loop(self):
+        global server_communicator
+        while self.trainer.training:
+            t0 = time.time()
+            i, last_img, last_loss, ema_last_loss = self.trainer.step()
+            t = time.time()
+            t_passed = t - self.last_train_step_time
+            self.average_training_time = self.average_training_time*0.8 + t_passed*0.2
+
+            if(i % 50 == 0):
+                data = {"trainer": 
+                            {
+                                "step": {
+                                    "iteration": i,
+                                    "max_iteration": self.settings.iterations,
+                                    "loss": last_loss,
+                                    "ema_loss": ema_last_loss,
+                                    "update_time": self.average_training_time
+                                }
+                            }
+                        }
+                server_communicator.send_message(data)
+
+            self.last_train_step_time = time.time()
+            update_render_time = self.average_rendering_time + self.average_training_time
+            p_step = self.average_training_time / update_render_time
+            diff = self.training_balance - p_step
+            if(diff > 0):
+                time.sleep(diff * update_render_time)
 
     def on_train_pause(self):
         global server_communicator
@@ -298,27 +330,6 @@ class ServerController:
         }
         server_communicator.send_message(data)
         self.loading = False
-
-    def on_train_step(self, iteration, img, loss, ema_loss):
-        global server_communicator
-        t = time.time()
-        t_passed = t - self.last_train_step_time
-        self.average_training_time = self.average_training_time*0.4 + t_passed*0.6
-        data = {"trainer": {"step": {
-            "iteration": iteration,
-            "max_iteration": self.settings.iterations,
-            "loss": loss,
-            "ema_loss": ema_loss,
-            "update_time": self.average_training_time
-            }}
-        }
-        server_communicator.send_message(data)
-        self.last_train_step_time = time.time()
-        update_render_time = self.average_rendering_time + self.average_training_time
-        p_step = self.average_training_time / update_render_time
-        diff = self.training_balance - p_step
-        if(diff > 0):
-            time.sleep(diff * update_render_time)
 
     def on_debug_toggle(self, val):
         global server_communicator
@@ -354,9 +365,10 @@ class ServerController:
             },
             "renderer": {
                 "settings_state":{
-                    "fov": self.render_cam.FoVx * 180. / np.pi,
+                    "fov": max(self.render_cam.FoVx, self.render_cam.FoVy) * 180. / np.pi,
                     "near_plane": self.render_cam.znear,
-                    "far_plane": self.render_cam.zfar
+                    "far_plane": self.render_cam.zfar,
+                    "balance": self.render_balance
                 }
             }                  
         }
@@ -373,7 +385,7 @@ class ServerController:
                     img_npy = img.byte().permute(1, 2, 0).contiguous().cpu().numpy()
                     _, img_jpeg = cv2.imencode(".jpeg", img_npy)
                     t = time.time() - t0
-                    self.average_rendering_time = self.average_rendering_time*0.4 + t*0.6
+                    self.average_rendering_time = self.average_rendering_time*0.8 + t*0.2
                     server_communicator.send_message(
                         { "render": {
                             "image" : img_jpeg.tobytes(),
@@ -384,7 +396,7 @@ class ServerController:
                     update_render_time = self.average_rendering_time + self.average_training_time
                     p_render = self.average_rendering_time / update_render_time
                     diff = self.render_balance -  p_render
-                    if(diff > 0):
+                    if(diff > 0 and self.trainer.training):
                         time.sleep(diff * update_render_time)
 
             else:

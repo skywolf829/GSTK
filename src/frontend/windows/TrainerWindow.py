@@ -13,7 +13,7 @@ class TrainerWindow(Window):
             self.button = dpg.add_button(label="Start training",
                         callback=self.button_pressed)
             dpg.add_spacer()
-            self.update_time = dpg.add_text(default_value="", tag="update_time")
+            self.update_time = dpg.add_text("Update speed: ", tag="train_update_time")
         self.training = False
         
     
@@ -43,9 +43,8 @@ class TrainerWindow(Window):
     def on_step(self, data):
         dpg.set_value(self.iteration_text, f"Iteration: {data['iteration']}/{data['max_iteration']}")
         dpg.set_value(self.loss_text, f"Loss: {data['ema_loss']:0.04f}")
-
-    def on_update_time(self, data):
-        dpg.set_value(self.update_time, f"{data / 1000 : 0.02f} ms per step / {1/data : 0.02f} FPS")
+        if "update_time" in data.keys():
+            dpg.set_value(self.update_time, f"{data['update_time'] / 1000. : 0.02f} ms per step / {1./data['update_time'] : 0.02f} FPS")
         
     def receive_message(self, data):
         if "training_started" in data.keys():
@@ -56,5 +55,3 @@ class TrainerWindow(Window):
             self.on_train_error(data['training_error'])
         if "step" in data.keys():
             self.on_step(data['step'])
-        if "update_time" in data.keys():
-            self.on_update_time(data['update_time'])
