@@ -50,3 +50,11 @@ class ModelSettingsWindow(Window):
             self.on_update(data['model_settings_updated'])
         if "model_settings_updated_error" in data.keys():
             self.on_update_error(data['model_settings_updated_error'])
+
+    def save_status(self, data=None):
+        if data is None: 
+            data = {
+                "sh_degree" : dpg.get_value("sh_degree"),
+                "device": dpg.get_value("device")
+            }
+        super().save_status(data)

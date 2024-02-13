@@ -146,6 +146,7 @@ class TrainingSettingsWindow(Window):
         data_to_send = {
             "update_trainer_settings" : trainer_settings
         }
+        
         self.app_controller.app_communicator.send_message(data_to_send)
 
     def on_update(self, data):
@@ -163,3 +164,25 @@ class TrainingSettingsWindow(Window):
             self.on_update(data['trainer_settings_updated'])
         if "trainer_settings_updated_error" in data.keys():
             self.on_update_error(data['trainer_settings_updated_error'])
+
+    def save_status(self, data=None):
+        if data is None: 
+            data = {
+                "iterations" : dpg.get_value("iterations"),
+                "position_lr_init" : dpg.get_value("position_lr_init"),
+                "position_lr_final" : dpg.get_value("position_lr_final"),
+                "position_lr_delay_mult" : dpg.get_value("position_lr_delay_mult"),
+                "position_lr_max_steps" : dpg.get_value("position_lr_max_steps"),
+                "feature_lr" : dpg.get_value("feature_lr"),
+                "opacity_lr" : dpg.get_value("opacity_lr"),
+                "scaling_lr" : dpg.get_value("scaling_lr"),
+                "rotation_lr" : dpg.get_value("rotation_lr"),
+                "percent_dense" : dpg.get_value("percent_dense"),
+                "lambda_dssim" : dpg.get_value("lambda_dssim"),
+                "densification_interval" : dpg.get_value("densification_interval"),
+                "opacity_reset_interval" : dpg.get_value("opacity_reset_interval"),
+                "densify_from_iter" : dpg.get_value("densify_from_iter"),
+                "densify_until_iter" : dpg.get_value("densify_until_iter"),
+                "densify_grad_threshold" : dpg.get_value("densify_grad_threshold")
+            }
+        super().save_status(data)

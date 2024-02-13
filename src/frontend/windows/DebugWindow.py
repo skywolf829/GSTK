@@ -31,6 +31,7 @@ class DebugWindow(Window):
             data_to_send = {
                 "debug" : True
             }
+        
         self.app_controller.app_communicator.send_message(data_to_send)
 
     def on_debug_error(self, data):
@@ -50,3 +51,16 @@ class DebugWindow(Window):
             self.on_debug_false()
         if "debug_error" in data.keys():
             self.on_debug_error(data['debug_error'])
+    
+    def save_status(self, data=None):
+        if data is None: 
+            data = {
+                "debug" : self.debug
+            }
+        super().save_status(data)
+
+    def sync_status(self, data=None):
+        if data is not None:
+            self.update_debug_val(data["debug"])
+        else:
+            super().sync_status(data)

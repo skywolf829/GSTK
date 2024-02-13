@@ -73,6 +73,7 @@ class RenderSettingsWindow(Window):
             data_to_send = {
                 "update_renderer_settings" : trainer_settings
             }
+            
             self.app_controller.app_communicator.send_message(data_to_send)
 
     def on_update(self, data):
@@ -92,3 +93,13 @@ class RenderSettingsWindow(Window):
             self.on_update(data['renderer_settings_updated'])
         if "renderer_settings_updated_error" in data.keys():
             self.on_update_error(data['renderer_settings_updated_error'])
+
+    def save_status(self, data=None):
+        if data is None: 
+            data = {
+                "resolution_scaling" : dpg.get_value("resolution_scaling"),
+                "fov": dpg.get_value("fov"),
+                "near_plane": dpg.get_value("near_plane"),
+                "far_plane": dpg.get_value("far_plane")
+            }
+        super().save_status(data)

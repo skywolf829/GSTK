@@ -16,7 +16,6 @@ class ServerConnectWindow(Window):
                 self.button = dpg.add_button(label="Connect", callback=self.connect_button_clicked)
                 self.status = dpg.add_text("", tag="connection_status")
 
-        
 
     def set_button_label(self, s : str):
         dpg.set_item_label(self.button, s)
@@ -31,7 +30,9 @@ class ServerConnectWindow(Window):
             self.app_controller.app_communicator.toggle_server_connection(ip, port)
         except Exception as e:
             print(f"Port must be integer, you entered {dpg.get_value('server_port')}")
+            port = 10789
             raise e
+        
         
     def receive_message(self, data: dict):
         if("connected" in data.keys()):            
@@ -42,3 +43,13 @@ class ServerConnectWindow(Window):
             self.set_button_label("Connect")
             self.set_status_text("")
             self.app_controller.popup_box("Success", "Successfully disconnected from server.")
+
+    def save_status(self, data=None): 
+        if data is None:
+            data = {
+                "server_ip" : dpg.get_value("server_ip"),
+                "server_port" : dpg.get_value("server_port")
+            }
+        super().save_status(data)
+
+    

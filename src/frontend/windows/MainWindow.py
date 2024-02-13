@@ -8,5 +8,5 @@ class MainWindow(Window):
         
         with dpg.window(label="Main Window", tag=self.tag, no_close=True):
             pass
-
+            
         

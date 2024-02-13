@@ -71,3 +71,12 @@ class DatasetSetupWindow(Window):
             self.on_dataset_loading(data['dataset_loading'])
         if "dataset_error" in data.keys():
             self.on_dataset_error(data['dataset_error'])
+
+    def save_status(self, data=None):
+        if data is None: 
+            data = {
+                "dataset_path" : dpg.get_value("dataset_path"),
+                "white_background" : dpg.get_value("white_background"),
+                "data_device": dpg.get_value("data_device")
+            }
+        super().save_status(data)

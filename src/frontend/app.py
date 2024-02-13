@@ -12,8 +12,12 @@ from windows.RenderWindow import RenderWindow
 from windows.TrainingSettingsWindow import TrainingSettingsWindow
 from windows.ModelSettingsWindow import ModelSettingsWindow
 from windows.TrainerWindow import TrainerWindow
+from windows.LogWindow import LogWindow
 from windows.DebugWindow import DebugWindow
 from windows.RenderSettingsWindow import RenderSettingsWindow
+
+from auth.auth import Auth
+from utils.status_maintain import restart_app
 
 class AppController:
     def __init__(self):
@@ -25,10 +29,12 @@ class AppController:
         # for a window displaying the loss over time, so in this 
         # dict, listened_tags['loss_data'] = [loss_curve_window]
         self.listened_tags = {}
-
+        self.windows_params = {}
+        self.windows = {}
+        self.auth = Auth(self)
         # Setup GUI
         dpg.create_context()
-        dpg.configure_app(docking=True, docking_space=True, init_file="window_layout.ini", load_init_file=True)
+        dpg.configure_app(docking=True, docking_space=True, init_file=f"config/{self.auth.uid+'_' if self.auth.uid is not None else ''}window_layout.ini", load_init_file=True)
         dpg.create_viewport(title='GSTK', width=1200, height=800)
 
         self.menubar_setup()
@@ -40,19 +46,23 @@ class AppController:
         self.model_settings_window = ModelSettingsWindow(self)
         self.trainer_window = TrainerWindow(self)
         self.dataset_window = DatasetSetupWindow(self)
+        self.login_window = LogWindow(self)
         self.debug_window = DebugWindow(self)
         self.renderer_settings_window = RenderSettingsWindow(self)
 
-
+        self.load_window_state()
+        self.load_params()
         self.register_message_listener(self, "other")
 
+        dpg.set_exit_callback(self.on_app_close)
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window("main_window", True)
         dpg.start_dearpygui()
+        # Move set_exit_callback before the destroy_context call to avoid segfault
         dpg.destroy_context()
-        # Causes seg fault on exit but it works
-        dpg.set_exit_callback(self.on_app_close)
+        
+        
     
     '''
     Registers window as a listener for message_tag when that
@@ -66,13 +76,25 @@ class AppController:
     # Top menu bar for whole application
     def menubar_setup(self):
         with dpg.viewport_menu_bar():
+
             with dpg.menu(label="File"):
                 dpg.add_menu_item(label="Save", callback=None)
                 dpg.add_menu_item(label="Save As")
+            
+            with dpg.menu(label="Account"):
+                dpg.add_menu_item(label="Sign in", 
+                    tag="sign_in_menu_item", 
+                    callback=lambda:self.login_window.signin_signup_pressed())
+                dpg.add_menu_item(label="Sign off", 
+                    tag="sign_off_menu_item", 
+                    callback=lambda:self.login_window.sign_out())
+                dpg.add_menu_item(label="Sign up", 
+                    tag="signup_menu_item", 
+                    callback=lambda:self.login_window.signin_signup_pressed()) 
                 
             with dpg.menu(label="Edit"):
                 dpg.add_menu_item(label="Save window layout", 
-                    callback=lambda: dpg.save_init_file("window_layout.ini"))
+                    callback=lambda: (self.save_windows_state(save_to_file=True), dpg.save_init_file(f"config/{self.auth.uid+'_' if self.auth.signed_in_status else ''}window_layout.ini")))
                 
             with dpg.menu(label="View"):
                 dpg.add_menu_item(label="Server connection", 
@@ -107,23 +129,85 @@ class AppController:
                     tag="debug_window_menu_item", 
                     callback=lambda:self.menu_button_click(DebugWindow, "debug_window"),
                     check=True)
+                dpg.add_menu_item(label="User Account", 
+                    tag="login_user_account_window_menu_item", 
+                    callback=lambda:self.menu_button_click(LogWindow, "login_user_account_window"),
+                    check=True)
 
     # Properly closes down the connection and threaded communicator
     def on_app_close(self):
         print("Closing")
         self.app_communicator.stop = True
-        self.app_communicator.stop()
+        # self.app_communicator.stop()
+        # dpg.save_init_file(f"config/{self.auth.uid+'_' if self.auth.signed_in_status else ''}window_layout.ini")
+        self.on_close_save_parameters()
+        if self.auth.signed_in_status:
+            self.auth.upload_documents(["window_layout.ini", "window_state.json", "app_params.json"])
         try:
             self.conn.close()
         except Exception:
             pass
     
+    def on_close_save_parameters(self):
+        # save window params
+        import json 
+        for window in self.windows.values():
+            window.save_status()
+        print("Saving window params to file.")
+        with open(f"config/{self.auth.uid+'_' if self.auth.signed_in_status else ''}app_params.json", "w") as f:
+            json.dump(self.windows_params, f)
+               
+
     def menu_button_click(self, window, tag):
         if(dpg.does_item_exist(tag)):
             dpg.configure_item(tag, show=not dpg.is_item_shown(tag))
         else:
             window(self)
-        
+
+
+    def save_windows_state(self, save_to_file=False):
+        window_states = {}
+        for window in self.windows_params.keys():
+            window_states[window] = dpg.is_item_shown(window)
+        if(save_to_file):
+            import json
+            with open(f"config/{self.auth.uid+'_' if self.auth.signed_in_status else ''}window_state.json", "w") as f:
+                json.dump(window_states, f)
+        return window_states
+
+    def load_window_state(self, filename="config/window_state.json"):
+        import json
+        filename = f"config/{self.auth.uid+'_' if self.auth.uid is not None else ''}window_state.json"
+        print(filename)
+        try:
+            with open(filename, "r") as file:
+                window_states = json.load(file)
+
+            for window, is_shown in window_states.items():
+                if is_shown:
+                    dpg.show_item(window)
+                    self.update_view_menu(window, True)
+                else:
+                    dpg.hide_item(window)
+                    self.update_view_menu(window, False)
+        except FileNotFoundError:
+            print("Window states file not found. Loading default states.")
+
+    def load_params(self, filename="config/app_params.json"):
+        import json
+        filename = f"config/{self.auth.uid+'_' if self.auth.uid is not None else ''}app_params.json"
+        try:
+            with open(filename, "r") as file:
+                self.windows_params = json.load(file)
+                print("Loading window params.")
+                for window, params in self.windows_params.items():
+                    if window in self.windows.keys():
+                        self.windows[window].sync_status(params)
+                    else:
+                        print(f"Window {window} not found.")
+        except FileNotFoundError:
+            print("Window params file not found. Loading default params.")   
+
     '''
     Enables or disables the checkmark next to the window on the view menu
     '''
@@ -169,7 +253,30 @@ class AppController:
         width = dpg.get_item_width(modal_id)
         height = dpg.get_item_height(modal_id)
         dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
-        
+
+    def popup_box_with_callback(self, title, message, ok_callback, cancel_callback):
+        with dpg.mutex():
+
+            viewport_width = dpg.get_viewport_client_width()
+            viewport_height = dpg.get_viewport_client_height()
+
+            with dpg.window(label=title, modal=True, no_close=True, tag="popup_callback_window") as modal_id:
+                dpg.add_text(message)
+                dpg.add_button(label="OK", width=75, 
+                               user_data=(modal_id, True), 
+                               callback=lambda:(ok_callback(), dpg.delete_item("popup_callback_window")))
+                dpg.add_button(label="Cancel", width=75, 
+                               user_data=(modal_id, True), 
+                               callback=lambda:(cancel_callback(), dpg.delete_item("popup_callback_window")))
+                #dpg.add_same_line()
+                #dpg.add_button(label="Cancel", width=75, user_data=(modal_id, False), callback=selection_callback)
+
+        # guarantee these commands happen in another frame
+        dpg.split_frame()
+        width = dpg.get_item_width(modal_id)
+        height = dpg.get_item_height(modal_id)
+        dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
+
     def receive_message(self, data):
         # Handles all "other" messages, usually global or state-related
         
@@ -185,6 +292,9 @@ class AppController:
             self.dataset_window.update_dataset_loaded_val(data['dataset_loaded'])
         if("render" in data.keys()):
             self.renderer_settings_window.update_renderer_settings(data['renderer_settings'])
+
+    def restart_app(self):
+        restart_app()
 
 
 class AppCommunicator(threading.Thread):
