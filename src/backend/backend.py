@@ -5,6 +5,7 @@ from model import GaussianModel
 from trainer import Trainer
 from argparse import ArgumentParser
 from utils.system_utils import mkdir_p
+from opengl_renderer import OpenGL_renderer, Cube
 from settings import Settings
 import threading
 import multiprocessing.connection as connection
@@ -41,6 +42,7 @@ class ServerController:
         self.settings = Settings()
         self.model = GaussianModel(self.settings, debug=self.DEBUG)
         self.trainer = Trainer(self.model, self.settings, debug=self.DEBUG)
+        self.opengl_renderer = None
         self.dataset = None
         self.render_cam = RenderCam()
 
@@ -376,12 +378,25 @@ class ServerController:
         
     def render_loop(self):
         global server_communicator
+
+        # Have to use same thread for opengl rendering
+        self.opengl_renderer = OpenGL_renderer()
+        self.opengl_renderer.add_item(Cube())
+
         while self.renderer_enabled:
             if(server_communicator.state == "connected" and not self.loading):
                 if(self.model.initialized):
                     t0 = time.time()
-                    render_package = self.model.render(self.render_cam)
+                    rgba_buffer, depth_buffer = self.opengl_renderer.render(self.render_cam)
+                    rgba_buffer = torch.tensor(rgba_buffer, dtype=torch.float32, device=self.settings.device) / 255.
+                    depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)*2 - 1
+                    #print(rgba_buffer)
+                    
+                    render_package = self.model.render(self.render_cam, 
+                        rgba_buffer=rgba_buffer, depth_buffer = depth_buffer)
                     img = torch.clamp(render_package['render'], min=0, max=1.0) * 255
+                    #img = torch.clamp(rgba_buffer[:,:,0:3], min=0, max=1.0).permute(2, 0, 1) * 255
+
                     img_npy = img.byte().permute(1, 2, 0).contiguous().cpu().numpy()
                     _, img_jpeg = cv2.imencode(".jpeg", img_npy)
                     t = time.time() - t0

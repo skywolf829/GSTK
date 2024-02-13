@@ -193,6 +193,7 @@ __global__ void preprocessCUDA(int P, int D, int M,
 	if (!in_frustum(idx, orig_points, viewmatrix, projmatrix, prefiltered, p_view))
 		return;
 
+
 	// Transform point by projecting
 	float3 p_orig = { orig_points[3 * idx], orig_points[3 * idx + 1], orig_points[3 * idx + 2] };
 	float4 p_hom = transformPoint4x4(p_orig, projmatrix);
@@ -245,7 +246,7 @@ __global__ void preprocessCUDA(int P, int D, int M,
 		rgb[idx * C + 1] = result.y;
 		rgb[idx * C + 2] = result.z;
 	}
-
+	
 	// Store some useful helper data for the next steps.
 	depths[idx] = p_view.z;
 	radii[idx] = my_radius;
@@ -265,10 +266,14 @@ renderCUDA(
 	const uint32_t* __restrict__ point_list,
 	int W, int H,
 	const float2* __restrict__ points_xy_image,
+	const float* __restrict__ depths,
 	const float* __restrict__ features,
 	const float4* __restrict__ conic_opacity,
 	float* __restrict__ final_T,
 	uint32_t* __restrict__ n_contrib,
+	const bool use_buffers,
+	const float4* __restrict__ rgba_buffer,
+	const float* __restrict__ depth_buffer,
 	const float* __restrict__ bg_color,
 	float* __restrict__ out_color)
 {
@@ -294,6 +299,7 @@ renderCUDA(
 	// Allocate storage for batches of collectively fetched data.
 	__shared__ int collected_id[BLOCK_SIZE];
 	__shared__ float2 collected_xy[BLOCK_SIZE];
+	__shared__ float collected_depth[BLOCK_SIZE];
 	__shared__ float4 collected_conic_opacity[BLOCK_SIZE];
 
 	// Initialize helper variables
@@ -301,6 +307,14 @@ renderCUDA(
 	uint32_t contributor = 0;
 	uint32_t last_contributor = 0;
 	float C[CHANNELS] = { 0 };
+	float4 pix_rgba = { 0 };
+	float pix_depth = 0.0f;
+	bool in_front_of_buffer = true;
+
+	if(inside && use_buffers){
+		pix_rgba = rgba_buffer[pix_id];
+		pix_depth = depth_buffer[pix_id];
+	}
 
 	// Iterate over batches until all done or range is complete
 	for (int i = 0; i < rounds; i++, toDo -= BLOCK_SIZE)
@@ -317,6 +331,7 @@ renderCUDA(
 			int coll_id = point_list[range.x + progress];
 			collected_id[block.thread_rank()] = coll_id;
 			collected_xy[block.thread_rank()] = points_xy_image[coll_id];
+			collected_depth[block.thread_rank()] = depths[coll_id];
 			collected_conic_opacity[block.thread_rank()] = conic_opacity[coll_id];
 		}
 		block.sync();
@@ -329,9 +344,28 @@ renderCUDA(
 
 			// Resample using conic matrix (cf. "Surface 
 			// Splatting" by Zwicker et al., 2001)
+			float depth = collected_depth[j];
 			float2 xy = collected_xy[j];
 			float2 d = { xy.x - pixf.x, xy.y - pixf.y };
 			float4 con_o = collected_conic_opacity[j];
+
+			// First check if the depth of this gaussian is behind
+			// the depth buffer (if using)
+			if(use_buffers && in_front_of_buffer && depth > pix_depth){
+				float alpha = min(0.99f, pix_rgba.w);
+				float test_T = T * (1 - alpha);
+				if (test_T < 0.0001f)
+				{
+					done = true;
+					continue;
+				}
+				C[0] += pix_rgba.x * alpha * T;
+				C[1] += pix_rgba.y * alpha * T;
+				C[2] += pix_rgba.z * alpha * T;
+				T = test_T;
+				in_front_of_buffer = false;
+			}
+
 			float power = -0.5f * (con_o.x * d.x * d.x + con_o.z * d.y * d.y) - con_o.y * d.x * d.y;
 			if (power > 0.0f)
 				continue;
@@ -361,15 +395,31 @@ renderCUDA(
 			last_contributor = contributor;
 		}
 	}
-
+	
 	// All threads that treat valid pixel write out their final
 	// rendering data to the frame and auxiliary buffers.
 	if (inside)
 	{
 		final_T[pix_id] = T;
 		n_contrib[pix_id] = last_contributor;
+		if(use_buffers){
+			if(in_front_of_buffer){
+				float alpha = min(0.99f, pix_rgba.w);
+				float test_T = T * (1 - alpha);
+				if (test_T >= 0.0001f)
+				{					
+					C[0] += pix_rgba.x * alpha * T;
+					C[1] += pix_rgba.y * alpha * T;
+					C[2] += pix_rgba.z * alpha * T;
+					T = test_T;
+					in_front_of_buffer = false;
+				}
+			}
+		}
+
 		for (int ch = 0; ch < CHANNELS; ch++)
 			out_color[ch * H * W + pix_id] = C[ch] + T * bg_color[ch];
+		
 	}
 }
 
@@ -379,10 +429,14 @@ void FORWARD::render(
 	const uint32_t* point_list,
 	int W, int H,
 	const float2* means2D,
+	const float* depths,
 	const float* colors,
 	const float4* conic_opacity,
 	float* final_T,
 	uint32_t* n_contrib,
+	const bool use_buffers,
+	const float4* rgba_buffer,
+	const float* depth_buffer,
 	const float* bg_color,
 	float* out_color)
 {
@@ -391,10 +445,14 @@ void FORWARD::render(
 		point_list,
 		W, H,
 		means2D,
+		depths,
 		colors,
 		conic_opacity,
 		final_T,
 		n_contrib,
+		use_buffers,
+		rgba_buffer,
+		depth_buffer,
 		bg_color,
 		out_color);
 }

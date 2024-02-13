@@ -225,7 +225,7 @@ class GaussianModel:
 
         self.active_sh_degree = self.settings.sh_degree
 
-    def render(self, viewpoint_camera, scaling_modifier = 1.0):
+    def render(self, viewpoint_camera, scaling_modifier = 1.0, rgba_buffer = None, depth_buffer = None):
         """
         Render the scene. 
         
@@ -294,7 +294,9 @@ class GaussianModel:
             opacities = opacity,
             shs = shs,
             scales = scales,
-            rotations = rotations)
+            rotations = rotations,
+            rgba_buffer = rgba_buffer,
+            depth_buffer = depth_buffer)
 
         # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
         # They will be excluded from value updates used in the splitting criteria.

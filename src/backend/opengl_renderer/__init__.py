@@ -4,13 +4,15 @@ Standalone code - not using LibGL from this repository
 '''
 import OpenGL
 from OpenGL.GL import *
-from OpenGL.GLUT import *
 from OpenGL.GLU import *
+import glfw
+
 
 import imageio.v3 as imageio
 
 import numpy as np
 import sys
+import os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from dataset.cameras import RenderCam
 from tqdm import tqdm
@@ -71,21 +73,32 @@ class OpenGL_renderer():
         
         self.framebufferObject = None
         self.last_texture_size = [0,0]
-        
+        self.window = None
+
         self.init_openGL()
         
         self.contents = []
-        self.contents.append(
-            Cube(T=np.array([2, 0, 0], dtype=np.float32))
-        )
+
+    def add_item(self, item):
+        self.contents.append(item)
 
     def init_openGL(self):
 
-        glutInit()
-        #glutInitWindowSize(100,100)
-        #glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB)
-        glutCreateWindow(b"Test")
-        glutHideWindow()
+        if not glfw.init():
+            print("Failed to start glfw - exiting")
+            quit()
+
+        # Create a windowed mode window and its OpenGL context
+        glfw.window_hint(glfw.VISIBLE, False)
+        self.window = glfw.create_window(100, 100, "Hello World", None, None)
+
+        if not self.window:
+            print("Failed to create window - exiting")
+            glfw.terminate()
+            quit()
+
+        # Make the window's context current
+        glfw.make_context_current(self.window)
 
         glEnable(GL_DEPTH_TEST)
         glDepthMask(GL_TRUE)
@@ -113,11 +126,12 @@ class OpenGL_renderer():
         if(w == self.last_texture_size[0] and \
            h == self.last_texture_size[1]):
             return
+        glfw.make_context_current(self.window)
         # Create a handle and assign a texture buffer to it
-        renderedTexture = glGenTextures(1)
+        self.renderedTexture = glGenTextures(1)
         # Bind the texture buffer to the GL_TEXTURE_2D target in the 
         # OpenGL context
-        glBindTexture(GL_TEXTURE_2D, renderedTexture)
+        glBindTexture(GL_TEXTURE_2D, self.renderedTexture)
         # Attach a texture 'img' (which should be of unsigned bytes) 
         # to the texture buffer. If you don't want a specific 
         # texture, you can just replace 'img' with 'None'.
@@ -148,7 +162,7 @@ class OpenGL_renderer():
         glBindFramebuffer(GL_FRAMEBUFFER, self.framebufferObject)
         # Attaches the texture buffer created above to the 
         # GL_COLOR_ATTACHMENT0 attachment point of the FBO
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderedTexture, 0)
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, self.renderedTexture, 0)
         # Attaches the renderbuffer created above to the 
         # GL_DEPTH_ATTACHMENT attachment point of the FBO
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRenderbuffer)
@@ -199,7 +213,7 @@ class OpenGL_renderer():
         #gluPerspective(np.rad2deg(render_cam.FoVx), 
         #               render_cam.image_width/render_cam.image_height, 
         #               render_cam.znear, render_cam.zfar)
-        glLoadMatrixf(render_cam.projection_matrix_openGL.cpu().numpy())
+        glLoadMatrixf(render_cam.projection_matrix.cpu().numpy())
         glMatrixMode(GL_MODELVIEW)
         glLoadIdentity()
         #glTranslatef(0.0, 0.0, -2.0)
@@ -229,27 +243,27 @@ class OpenGL_renderer():
                             GL_DEPTH_COMPONENT, GL_FLOAT)
         depth = np.frombuffer(depth, dtype=np.float32).reshape(
             render_cam.image_width, render_cam.image_height)
-                
+        
+        # Unbind cleanup
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
         #glutSwapBuffers()
         return render, depth
     
 if __name__ == "__main__":
     a = OpenGL_renderer()
-    cam = RenderCam(T=[0,0,-2])
-    
+    cam = RenderCam(znear = 0.1, zfar=4000)
+    a.add_item(Cube())
     render, depth = a.render(cam)
-    
 
-    for _ in tqdm(range(100)):
-        cam.move_right(0.01)
-        render, depth = a.render(cam)
-
-
+    print(depth.min())
+    depth -= depth.min()
+    depth /= depth.max()
+    depth = depth[:,:,None].repeat(3,2)
+    depth = (depth*255).astype(np.uint8)
 
     imageio.imwrite("glut.png", render)
-    
-    imageio.imwrite("glut_depth.png", 
-        (((depth-depth.min())/(depth.max()-depth.min()+1e-8))[...,None].repeat(3, 2)*255).astype(np.uint8))
+
+    imageio.imwrite("glut_depth.png", depth)
 
 
 
