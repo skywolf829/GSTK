@@ -13,5 +13,6 @@ dependencies:
   - plyfile
   - pip:
     - opencv-python
-    - PyOpenGL
-    - PyOpenGL_accelerate
+    - glfw
+    - submodules/PyOpenGL
+    - submodules/PyOpenGL/accelerate
