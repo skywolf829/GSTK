@@ -402,6 +402,7 @@ class ServerController:
             else:
                 time.sleep(1.0)
 
+
 class ServerCommunicator(threading.Thread):
 
     def __init__(self, server_controller : ServerController, ip : str, port: int, *args, **kwargs): 
