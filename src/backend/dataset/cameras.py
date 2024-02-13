@@ -124,8 +124,17 @@ class RenderCam:
                             zfar=self.zfar, 
                             fovX=self.FoVx, 
                             fovY=self.FoVy,
-                            device=self.data_device).T
-
+                            device=self.data_device,
+                            z_sign=1.0).T
+    @property 
+    def projection_matrix_openGL(self):
+        return getProjectionMatrix(znear=self.znear, 
+                            zfar=self.zfar, 
+                            fovX=self.FoVx, 
+                            fovY=self.FoVy,
+                            device=self.data_device,
+                            z_sign=-1.0).T
+    
     @property
     def full_proj_transform(self):
         return self.world_view_transform @ \
@@ -135,6 +144,21 @@ class RenderCam:
     def camera_center(self):
         return self.world_view_transform.inverse()[3, :3]
     
+    def move_forward(self, d):
+        f = np.linalg.norm(self.T)
+        world_space_change = f*d*self.forward
+        self.COI += world_space_change
+    
+    def move_right(self, d):
+        f = np.linalg.norm(self.T)
+        world_space_change = f*d*self.right
+        self.COI += world_space_change
+
+    def move_up(self, d):
+        f = np.linalg.norm(self.T)
+        world_space_change = f*d*self.up
+        self.COI += world_space_change
+
     def process_camera_move(self, data):
         if(self.mode == "arcball"):
             if("mouse_move" in data.keys()):

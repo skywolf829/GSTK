@@ -48,7 +48,7 @@ def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
     Rt = np.linalg.inv(C2W)
     return np.float32(Rt)
 
-def getProjectionMatrix(znear, zfar, fovX, fovY, device="cuda"):
+def getProjectionMatrix(znear, zfar, fovX, fovY, device="cuda", z_sign=1.0):
     tanHalfFovY = math.tan((fovY / 2))
     tanHalfFovX = math.tan((fovX / 2))
 
@@ -57,9 +57,7 @@ def getProjectionMatrix(znear, zfar, fovX, fovY, device="cuda"):
     right = tanHalfFovX * znear
     left = -right
 
-    P = torch.zeros(4, 4, device=device)
-
-    z_sign = 1.0
+    P = torch.zeros(4, 4, dtype=torch.float32, device=device)
 
     P[0, 0] = 2.0 * znear / (right - left)
     P[1, 1] = 2.0 * znear / (top - bottom)
