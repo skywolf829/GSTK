@@ -1,3 +1,4 @@
 [submodule "src/backend/submodules/pyopengl"]
 	path = src/backend/submodules/pyopengl
 	url = https://github.com/mcfletch/pyopengl
+	ignore = dirty
