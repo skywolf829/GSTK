@@ -54,12 +54,12 @@ class AppController:
         self.load_params()
         self.register_message_listener(self, "other")
 
+        # Move set_exit_callback before the destroy_context call to avoid segfault
         dpg.set_exit_callback(self.on_app_close)
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window("main_window", True)
         dpg.start_dearpygui()
-        # Move set_exit_callback before the destroy_context call to avoid segfault
         dpg.destroy_context()
         
         

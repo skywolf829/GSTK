@@ -155,11 +155,12 @@ class Auth:
                     # TODO: version checks 
                     if os.path.exists(f"./config/{self.uid}_{fileName}"):
                         print(f"File {fileName} already exists locally.") 
+                        continue
                     else:
                         print(f"File {fileName} does not exist locally.")
                         self.is_local_config_dirty = True 
-                    blob.make_public()
-                    download_file(blob.public_url, f"./config/{self.uid}_{fileName}")
+                        blob.make_public()
+                        download_file(blob.public_url, f"./config/{self.uid}_{fileName}")
             self.handle_dirty_update_check()
 
     def get_next_latest_timestamp(self): 
