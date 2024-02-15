@@ -12,7 +12,7 @@ dependencies:
   - tqdm
   - plyfile
   - pip:
-    - opencv-python
     - glfw
+    - simplejpeg
     - submodules/PyOpenGL
     - submodules/PyOpenGL/accelerate

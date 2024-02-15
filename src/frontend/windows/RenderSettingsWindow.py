@@ -11,7 +11,9 @@ class RenderSettingsWindow(Window):
         
             # Trainer settings
             dpg.add_text("Rendering settings")
-            
+            dpg.add_checkbox(label="Renderer enabled", 
+                               tag='renderer_enabled',
+                               default_value=True)
             dpg.add_slider_float(label="Resolution scaling",
                                  tag="resolution_scaling",
                                  default_value=1.0,
@@ -20,12 +22,6 @@ class RenderSettingsWindow(Window):
                                  format='%.2f')
             dpg.add_text("Resolution: ", tag="effective_resolution")
             
-            dpg.add_slider_float(label="Render/training balance", 
-                                default_value=0.5,
-                                tag="balance",
-                                min_value=0.0,
-                                max_value=1.0,
-                                format='%0.2f')
             dpg.add_slider_float(label="Field of view", 
                                tag="fov", 
                                default_value=70,
@@ -68,13 +64,13 @@ class RenderSettingsWindow(Window):
             fovx = dpg.get_value("fov")
             fovy = dpg.get_value("fov") * h/w
         render_settings = {
+            'renderer_enabled': dpg.get_value('renderer_enabled'),
             "width" : w,
             "height" : h,
             "fov_x" : fovx,
             "fov_y" : fovy,
             "near_plane" : dpg.get_value("near_plane"),
-            "far_plane" : dpg.get_value("far_plane"),
-            "balance": dpg.get_value("balance")
+            "far_plane" : dpg.get_value("far_plane")
         }
         if(self.app_controller.app_communicator.connected):
             data_to_send = {
@@ -90,10 +86,10 @@ class RenderSettingsWindow(Window):
 
     def on_receive_state(self, data):
 
+        dpg.set_value('renderer_enabled', data['renderer_enabled'])
         dpg.set_value("fov", data['fov'])
         dpg.set_value("near_plane", data['near_plane'])
         dpg.set_value("far_plane", data['far_plane'])
-        dpg.set_value("balance", data['balance'])
 
     def receive_message(self, data):
         if "renderer_settings_updated" in data.keys():

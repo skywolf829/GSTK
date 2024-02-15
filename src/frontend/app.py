@@ -46,6 +46,7 @@ class AppController:
 
         self.register_message_listener(self, "other")
 
+        #dpg.set_viewport_vsync(True)
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.set_primary_window("main_window", True)

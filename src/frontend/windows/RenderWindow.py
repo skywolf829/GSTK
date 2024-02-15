@@ -2,7 +2,7 @@ import dearpygui.dearpygui as dpg
 from windows import Window
 import numpy as np
 import time
-import cv2
+from simplejpeg import decode_jpeg
 
 class RenderWindow(Window):
     def __init__(self, app_controller):
@@ -71,8 +71,7 @@ class RenderWindow(Window):
             
     def on_new_image(self, data):
         #print("Updating texture")
-        data = np.frombuffer(data, dtype=np.byte)
-        data = cv2.imdecode(data, cv2.IMREAD_COLOR)
+        data = decode_jpeg(data, fastdct=False, fastupsample=False)
         data = data.astype(np.float32) / 255.
 
         x_dim = min(self.tex.shape[0], data.shape[0])

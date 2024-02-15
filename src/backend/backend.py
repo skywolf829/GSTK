@@ -15,17 +15,13 @@ import torch
 import numpy as np
 from dataset.cameras import RenderCam
 import multiprocessing
-import cv2
+from simplejpeg import encode_jpeg
+#from torchvision.io import encode_jpeg as encode_jpeg_torch
 #import yappi
 
 def signal_handler(sig, frame):
     pid = os.getpid()
-    print('Exiting')
-    global server_communicator
-    server_communicator.stop = True
-    # This is required otherwise the ServerCommunicator will stay listening
-    #yappi.stop()
-    #yappi.get_func_stats(ctx_id=1).print_all()
+    print('Closing')
     os.kill(pid, 9)
     sys.exit(0)
     
@@ -49,32 +45,29 @@ class ServerController:
         self.loading = False
         self.renderer_enabled = True
         self.DEBUG = False
+        
+        self.server_communicator = ServerCommunicator(self, ip, port)
 
-        # < 0.5 is more preference to rendering, > 0.5 is more preference to training
-        self.render_balance = 0.5 
-        self.training_balance = 0.5
-
-        global server_communicator
-        server_communicator = ServerCommunicator(self, ip, port)
-        server_communicator.start()
-
-        self.render_thread = threading.Thread(target=self.render_loop, 
-                                              args=(), 
-                                              daemon=True,
-                                              name="RenderThread")
-        self.render_thread.start()
+        #self.main_thread = threading.Thread(target=self.main_loop, 
+        #                                      args=(), 
+        #                                      daemon=True,
+        #                                      name="TrainRenderThread")
+        #self.main_thread.start()
 
         self.average_training_time = 0
         self.average_rendering_time = 0
-        self.last_train_step_time = 0
+        self.average_communication_time = 0
+        self.average_step_time = 0
+        self.average_message_listening_time = 0
+        #self.main_thread.join()
+        self.main_loop()
        
     def process_message(self,data):
-        global server_communicator
         #print("Received message")
         #print(data)
         if(self.loading):
             data = {"other" : {"error": "Please wait until the current operation is completed"}}
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             return
         
         
@@ -114,13 +107,11 @@ class ServerController:
         if("debug" in data.keys()):
             self.on_debug_toggle(data['debug'])
 
-        if("camera_move" in data.keys()):
+        if("camera_move" in data.keys() and self.renderer_enabled):
             self.render_cam.process_camera_move(
                 data['camera_move'])
             
     def initialize_dataset(self, data):
-        global server_communicator
-
         # Just load all key data to settings
         for k in data.keys():
             # Check if the keys line up
@@ -128,7 +119,7 @@ class ServerController:
                 data = {
                     "dataset": {"dataset_error": f"Key {k} from client not present in Settings"}
                 }
-                server_communicator.send_message(data)
+                self.server_communicator.send_message(data)
                 self.loading = False
                 return
             else:
@@ -140,7 +131,7 @@ class ServerController:
             data = {
                 "dataset": {"dataset_error": f"Dataset path does not exist: {data['dataset_path']}"}
             }
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             self.loading = False
             return
         
@@ -152,14 +143,14 @@ class ServerController:
             data = {
                 "dataset": {"dataset_error": f"Dataset device does not exist: {data['data_device']}"}
             }
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             self.loading = False
             return
         
         # Create dataset
         try:
             data = {"dataset": {"dataset_loading": f""}}
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             self.dataset = Dataset(self.settings, debug=self.DEBUG)
             self.trainer.set_dataset(self.dataset)
             self.trainer.on_settings_update(self.settings)
@@ -170,19 +161,17 @@ class ServerController:
             data = {
                 "dataset": {"dataset_error": f"Dataset failed to initialize, likely doesn't recognize dataset type."}
             }
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             self.loading = False
             return
         
         data = {
             "dataset": {"dataset_initialized": f"Dataset was initialized."}
         }
-        server_communicator.send_message(data)
+        self.server_communicator.send_message(data)
         self.loading = False
         
     def update_trainer_settings(self, data):
-        global server_communicator
-
         # Just load all key data to settings
         for k in data.keys():
             # Check if the keys line up
@@ -190,7 +179,7 @@ class ServerController:
                 data = {
                     "trainer": {"trainer_settings_updated_error": f"Key {k} from client not present in Settings"}
                 }
-                server_communicator.send_message(data)
+                self.server_communicator.send_message(data)
                 self.loading = False
                 return
             
@@ -204,19 +193,18 @@ class ServerController:
             data = {
                 "trainer": {"trainer_settings_updated_error": f"Failed to update trainer settings."}
             }
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             self.loading = False
             return
         
         data = {
             "trainer": {"trainer_settings_updated": f"Trainer settings successfully updated."}
         }
-        server_communicator.send_message(data)
+        self.server_communicator.send_message(data)
         print("Initialized model and trainer")
         self.loading = False
 
     def update_model_settings(self, data):
-        global server_communicator
 
         self.loading = True
         # Check if the data device exists
@@ -227,7 +215,7 @@ class ServerController:
             data = {
                 "model": {"model_settings_updated_error": f"Device does not exist: {data['device']}"}
             }
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             self.loading = False
             return
         
@@ -235,7 +223,7 @@ class ServerController:
             data = {
                 "model": {"model_settings_updated_error": f"SH degree is invalid: {data['device']}"}
             }
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             self.loading = False
             return
         
@@ -247,81 +235,46 @@ class ServerController:
         data = {
             "model": {"model_settings_updated": f"Model settings were updated"}
         }
-        server_communicator.send_message(data)
+        self.server_communicator.send_message(data)
         print("Updated model settings")
         self.loading = False
 
     def update_renderer_settings(self, data):
+        self.renderer_enabled = data['renderer_enabled']
         self.render_cam.image_width = data['width']
         self.render_cam.image_height = data['height']
         self.render_cam.FoVx = np.deg2rad(data['fov_x'])
         self.render_cam.FoVy = np.deg2rad(data['fov_y'])
         self.render_cam.znear = data['near_plane']
         self.render_cam.zfar = data['far_plane']
-        self.render_balance = np.clip(data['balance'], 0., 1.)
-        self.training_balance = 1 - self.render_balance
 
     def on_train_start(self):
-        global server_communicator
+        
         self.loading = True
         if(self.dataset is None or self.model is None or self.trainer is None):
             data = {
                 "trainer": {"training_error": f"Cannot begin training until the dataset, model, and trainer are initialized."}
             }
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             self.loading = False
             return
         
-        self.training_thread = threading.Thread(target = self.train_loop,
-                                args=(), daemon=True, name="TrainingThread")
+       
         self.trainer.training = True
-        self.last_train_step_time = time.time()
-        self.training_thread.start()
         data = {
             "trainer": {"training_started": True}
         }
-        server_communicator.send_message(data)
+        self.server_communicator.send_message(data)
         self.loading = False
-        #server_communicator.disconnect()
-
-    def train_loop(self):
-        global server_communicator
-        while self.trainer.training:
-            t0 = time.time()
-            i, last_img, last_loss, ema_last_loss = self.trainer.step()
-            t = time.time()
-            t_passed = t - self.last_train_step_time
-            self.average_training_time = self.average_training_time*0.8 + t_passed*0.2
-
-            if(i % 50 == 0):
-                data = {"trainer": 
-                            {
-                                "step": {
-                                    "iteration": i,
-                                    "max_iteration": self.settings.iterations,
-                                    "loss": last_loss,
-                                    "ema_loss": ema_last_loss,
-                                    "update_time": self.average_training_time
-                                }
-                            }
-                        }
-                server_communicator.send_message(data)
-
-            self.last_train_step_time = time.time()
-            update_render_time = self.average_rendering_time + self.average_training_time
-            p_step = self.average_training_time / update_render_time
-            diff = self.training_balance - p_step
-            if(diff > 0):
-                time.sleep(diff * update_render_time)
 
     def on_train_pause(self):
-        global server_communicator
+        
         self.loading = True
         if(self.dataset is None or self.model is None or self.trainer is None):
             data = {
-                "trainer": {"training_error": f"Cannot begin training until the dataset, model, and trainer are initialized."}
+                "trainer": {"training_error": f"Cannot end training until the dataset, model, and trainer are initialized."}
             }
-            server_communicator.send_message(data)
+            self.server_communicator.send_message(data)
             self.loading = False
             return
         
@@ -330,11 +283,11 @@ class ServerController:
         data = {
             "trainer": {"training_paused": True}
         }
-        server_communicator.send_message(data)
+        self.server_communicator.send_message(data)
         self.loading = False
 
     def on_debug_toggle(self, val):
-        global server_communicator
+        
         print(f"Setting debug to {val}")
         self.loading = True
         self.DEBUG = val
@@ -345,11 +298,11 @@ class ServerController:
         if(self.model is not None):
             self.model.DEBUG = self.DEBUG
         data = {"debug": {"debug_enabled" if self.DEBUG else "debug_disabled": True}}
-        server_communicator.send_message(data)
+        self.server_communicator.send_message(data)
         self.loading = False
 
     def on_connect(self):
-        global server_communicator
+        
         # Send messages for each of the objects to send settings state for
         data =  {
             "other": {
@@ -367,133 +320,194 @@ class ServerController:
             },
             "renderer": {
                 "settings_state":{
+                    'renderer_enabled': self.renderer_enabled,
                     "fov": max(self.render_cam.FoVx, self.render_cam.FoVy) * 180. / np.pi,
                     "near_plane": self.render_cam.znear,
-                    "far_plane": self.render_cam.zfar,
-                    "balance": self.render_balance
+                    "far_plane": self.render_cam.zfar
                 }
             }                  
         }
-        server_communicator.send_message(data)
-        
-    def render_loop(self):
-        global server_communicator
+        self.server_communicator.send_message(data)
+        self.renderer_enabled = True
 
-        # Have to use same thread for opengl rendering
+    def on_disconnect(self):
+        #self.trainer.training = False
+        self.renderer_enabled = False
+
+    def render(self):
+        #rgba_buffer, depth_buffer = self.opengl_renderer.render(self.render_cam)
+        #rgba_buffer = torch.tensor(rgba_buffer, dtype=torch.float32, device=self.settings.device) / 255.
+        #depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)*2 - 1
+        
+        render_package = self.model.render(self.render_cam) 
+            #rgba_buffer=rgba_buffer, depth_buffer = depth_buffer)
+        img = torch.clamp(render_package['render'], min=0, max=1.0) * 255
+        return img
+        
+    def encode_img(self, img:torch.Tensor):
+        
+        img_npy = img.byte().permute(1, 2, 0).contiguous().cpu().numpy()
+        img_jpeg = encode_jpeg(img_npy, quality=85, fastdct=True)
+        return img_jpeg
+    
+    def send_render_image(self, img_jpeg):
+        
+        self.server_communicator.send_message(
+            { "render": {
+                "image" : img_jpeg,
+                "update_time": self.average_step_time
+                }
+            }
+        )
+
+    def send_train_data(self, i, last_loss, ema_last_loss):
+        
+        data = {"trainer": 
+                {
+                    "step": {
+                        "iteration": i,
+                        "max_iteration": self.settings.iterations,
+                        "loss": last_loss,
+                        "ema_loss": ema_last_loss,
+                        "update_time": self.average_step_time
+                    }
+                }
+            }
+        self.server_communicator.send_message(data)
+
+    def process_messages(self):
+        t0 = time.time()
+        self.server_communicator.step()
+        for msg in self.server_communicator.data_to_process:
+            self.process_message(msg)
+        self.server_communicator.data_to_process.clear()
+        t_messages = time.time() - t0
+        self.average_message_listening_time = self.average_message_listening_time*0.8 + t_messages*0.2
+
+    def render_screen_image(self):
+        if(self.model.initialized and self.renderer_enabled):
+            
+            t0 = time.time()
+            img = self.render()
+            render_time = time.time() - t0
+            self.average_rendering_time = self.average_rendering_time*0.8 + render_time*0.2
+            t0 = time.time()
+            img_jpg = self.encode_img(img)
+            self.send_render_image(img_jpg)
+            comm_this_step = time.time() - t0
+            self.average_communication_time = self.average_communication_time*0.8 + comm_this_step*0.2
+
+    def do_train_step(self):
+        if(self.trainer.training):
+            
+            t0 = time.time()
+            i, last_img, last_loss, ema_last_loss = self.trainer.step()
+            
+            t = time.time()
+            train_time = t - t0
+            self.average_training_time = self.average_training_time*0.8 + train_time*0.2
+
+            if(i % 50 == 0):
+                self.send_train_data(i, last_loss, ema_last_loss)
+
+    def main_loop(self):
         self.opengl_renderer = OpenGL_renderer()
         self.opengl_renderer.add_item(Cube())
 
-        while self.renderer_enabled:
-            if(server_communicator.state == "connected" and not self.loading):
-                if(self.model.initialized):
-                    t0 = time.time()
-                    rgba_buffer, depth_buffer = self.opengl_renderer.render(self.render_cam)
-                    rgba_buffer = torch.tensor(rgba_buffer, dtype=torch.float32, device=self.settings.device) / 255.
-                    depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)*2 - 1
-                    #print(rgba_buffer)
-                    
-                    render_package = self.model.render(self.render_cam, 
-                        rgba_buffer=rgba_buffer, depth_buffer = depth_buffer)
-                    img = torch.clamp(render_package['render'], min=0, max=1.0) * 255
-                    #img = torch.clamp(rgba_buffer[:,:,0:3], min=0, max=1.0).permute(2, 0, 1) * 255
+        t = time.time()
+        while(True):
+            
+            t_start = time.time()
 
-                    img_npy = img.byte().permute(1, 2, 0).contiguous().cpu().numpy()
-                    _, img_jpeg = cv2.imencode(".jpeg", img_npy)
-                    t = time.time() - t0
-                    self.average_rendering_time = self.average_rendering_time*0.8 + t*0.2
-                    server_communicator.send_message(
-                        { "render": {
-                            "image" : img_jpeg.tobytes(),
-                            "update_time": self.average_rendering_time
-                            }
-                        }
-                    )
-                    update_render_time = self.average_rendering_time + self.average_training_time
-                    p_render = self.average_rendering_time / update_render_time
-                    diff = self.render_balance -  p_render
-                    if(diff > 0 and self.trainer.training):
-                        time.sleep(diff * update_render_time)
+            self.process_messages()
+            
+            self.render_screen_image()
+            
+            self.do_train_step()
+            
+            if(not (self.model.initialized or self.renderer_enabled) and not self.trainer.training):
+                time.sleep(0.01)
 
-            else:
-                time.sleep(1.0)
+            
+            self.average_step_time = self.average_step_time*0.8 + 0.2*(time.time()-t_start)
 
+            if(time.time() > t + 1):
+                #print(f"Render: {1/(1e-12+self.average_rendering_time):0.02f} FPS, \t " + \
+                #    f"Train: {1/(1e-12+self.average_training_time) : 0.02f} FPS, \t " + \
+                #    f"Send img: {self.average_communication_time * 1000 : 0.02f}ms, \t " + \
+                #    f"Msg listen: {self.average_message_listening_time * 1000 : 0.02f}ms, \t " + \
+                #    f"Full step: {self.average_step_time*1000:0.02f}ms")
+                t = time.time()
 
-class ServerCommunicator(threading.Thread):
+            
+class ServerCommunicator():
 
     def __init__(self, server_controller : ServerController, ip : str, port: int, *args, **kwargs): 
-        super().__init__(*args, **kwargs, daemon=True, name="ServerCommunicatorThread")
-
-        self.state = "uninitialized"        
+   
         self.server_controller = server_controller
         self.ip = ip
         self.port = port
+
+        self.connected = False
+        self.listening = False
         self.listener : connection.Listener = None
         self.conn : connection.Connection = None
-        self.stop = False
-        self.lock = multiprocessing.Lock()
 
-    def run(self):
-        while not self.stop:
-            if(self.state == "uninitialized"):
-                # https://stackoverflow.com/questions/27428936/python-size-of-message-to-send-via-socket
-                self.listener : connection.Listener = connection.Listener((self.ip, self.port), authkey=b"GRAVITY")
-                self.state : str = "listening"
-                print(f"Listening on {self.ip}:{self.port}")   
 
-            elif(self.state == "listening"):
-                # Blocking accept call - waits here until app connects
-                self.conn : connection.Connection = self.listener.accept()
-                print(f'Connection accepted from {self.listener.last_accepted}')
-                self.state = "connected"
-                self.server_controller.on_connect()
+        self.data_to_process = []
 
-            elif(self.state == "connected"):
-                # blocking call, see check_for_msg
-                data = self.check_for_msg()
-                if data is not None:
-                    self.server_controller.process_message(data)
-            #time.sleep(0.0001)
-            
-        print("Stop signal detected")
-        # clean up
-        if(self.conn):
-            self.conn.close()
-        if(self.listener):
-            self.listener.close()
+    def wait_for_connection(self):
+        self.listener : connection.Listener = connection.Listener((self.ip, self.port), authkey=b"GRAVITY")
+        print(f"Listening on {self.ip}:{self.port}")
+        
+        self.conn : connection.Connection = self.listener.accept()
+        print(f'Connection accepted from {self.listener.last_accepted}')
+        self.server_controller.on_connect()
+        self.connected = True
+        self.listening = False
 
-        self.conn = None
-        self.listener = None
+    def step(self):
+        if self.listening:
+            return
+        
+        if not self.connected:
+            self.listening = True
+            # Threaded so cntl+c works
+            t = threading.Thread(target=self.wait_for_connection,
+                                 args=(),
+                                 daemon=True)
+            t.start()
+
+        else:
+            # blocking call, see check_for_msg
+            self.gather_messages()
 
     def disconnect(self):
-        self.state = "uninitialized"
+        self.connected = False
         self.conn.close()
         self.listener.close()
+        self.server_controller.on_disconnect()
 
-    def check_for_msg(self):
-        item = None
+    def gather_messages(self):
         try:
             # poll tells us if there is a message ready
-            if(self.conn.poll()):
+            # read all messages available
+            while(self.conn.poll()):
                 # Blocking call, will wait here
-                item = self.conn.recv()
+                data = self.conn.recv()
+                self.data_to_process.append(data)
+
         except Exception:
             print(f"Connection closed")
             self.disconnect()
-            item = None
-        return item
 
     def send_message(self, data):
-        with self.lock:
-            if(self.state == "connected"):
-                try:
-                    #print(f"Sending {data}")
-                    self.conn.send(data)
-                except Exception as e:
-                    print("Failed to send data.")
-
-
-# global communicator so the thread can be shut down with ctrl-c
-server_communicator = None
+        if(self.connected):
+            try:
+                #print(f"Sending {data}")
+                self.conn.send(data)
+            except Exception as e:
+                print("Failed to send data.")
 
 if __name__ == "__main__":
     # Set up command line argument parser
@@ -506,6 +520,6 @@ if __name__ == "__main__":
     s = ServerController(args.ip, args.port)
 
     # infinite loop until ctrl-c
-    while True:
-        time.sleep(1.0)
+    #while True:
+    #    time.sleep(1.0)
     
