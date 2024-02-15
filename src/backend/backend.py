@@ -65,13 +65,13 @@ class ServerController:
     def process_message(self,data):
         #print("Received message")
         #print(data)
-        if(self.loading):
-            data = {"other" : {"error": "Please wait until the current operation is completed"}}
-            self.server_communicator.send_message(data)
-            return
+        #if(self.loading):
+        #    data = {"other" : {"error": "Please wait until the current operation is completed"}}
+        #    self.server_communicator.send_message(data)
+        #    return
         
         
-        if("initialize_dataset" in data.keys()):
+        if("initialize_dataset" in data.keys() and not self.loading):
             t = threading.Thread(target=self.initialize_dataset, 
                                  args=[data['initialize_dataset']],
                                  daemon=True,
@@ -79,7 +79,7 @@ class ServerController:
             self.loading = True
             t.start()
             
-        if("update_trainer_settings" in data.keys()):
+        if("update_trainer_settings" in data.keys() and not self.loading):
             t = threading.Thread(target=self.update_trainer_settings, 
                                  args=[data['update_trainer_settings']],
                                  daemon=True,
@@ -87,7 +87,7 @@ class ServerController:
             self.loading = True            
             t.start()
         
-        if("update_model_settings" in data.keys()):
+        if("update_model_settings" in data.keys() and not self.loading):
             t = threading.Thread(target=self.update_model_settings, 
                                  args=[data['update_model_settings']],
                                  daemon=True,
@@ -110,6 +110,12 @@ class ServerController:
         if("camera_move" in data.keys() and self.renderer_enabled):
             self.render_cam.process_camera_move(
                 data['camera_move'])
+        
+        if("save_model" in data.keys()):
+            self.on_save_model(data['save_model'])
+
+        if("load_model" in data.keys()):
+            self.on_load_model(data['load_model'])
             
     def initialize_dataset(self, data):
         # Just load all key data to settings
@@ -154,7 +160,7 @@ class ServerController:
             self.dataset = Dataset(self.settings, debug=self.DEBUG)
             self.trainer.set_dataset(self.dataset)
             self.trainer.on_settings_update(self.settings)
-            if not self.model.initialized:
+            if(self.dataset.scene_info.point_cloud is not None):
                 self.model.create_from_pcd(self.dataset.scene_info.point_cloud)
                 self.trainer.set_model(self.model)
         except Exception as e:
@@ -250,8 +256,7 @@ class ServerController:
 
     def on_train_start(self):
         
-        self.loading = True
-        if(self.dataset is None or self.model is None or self.trainer is None):
+        if(self.dataset is None or self.model is None or self.trainer is None or self.loading):
             data = {
                 "trainer": {"training_error": f"Cannot begin training until the dataset, model, and trainer are initialized."}
             }
@@ -260,6 +265,7 @@ class ServerController:
             return
         
        
+        self.loading = True
         self.trainer.training = True
         data = {
             "trainer": {"training_started": True}
@@ -302,7 +308,7 @@ class ServerController:
         self.loading = False
 
     def on_connect(self):
-        
+
         # Send messages for each of the objects to send settings state for
         data =  {
             "other": {
@@ -409,6 +415,29 @@ class ServerController:
 
             if(i % 50 == 0):
                 self.send_train_data(i, last_loss, ema_last_loss)
+            if(i == self.settings.iterations):
+                self.trainer.training = False
+
+    def on_save_model(self, path):
+        if not self.model.initialized:
+            data = {"other" : {"error": f"Model not initialized, cannot save."}}
+            self.server_communicator.send_message(data)
+            return
+        self.model.save_ply(path)
+
+    def on_load_model(self, path):
+        if(not os.path.exists(path)):
+            data = {"other" : {"error": f"Location doesn't exist: {path}"}}
+            self.server_communicator.send_message(data)
+            return
+        
+        try:
+            self.model.load_ply(path)
+            self.trainer.set_model(self.model)
+        except Exception as e:
+            data = {"other" : {"error": f"Error loading the model."}}
+            self.server_communicator.send_message(data)
+            return
 
     def main_loop(self):
         self.opengl_renderer = OpenGL_renderer()
@@ -462,9 +491,9 @@ class ServerCommunicator():
         
         self.conn : connection.Connection = self.listener.accept()
         print(f'Connection accepted from {self.listener.last_accepted}')
-        self.server_controller.on_connect()
         self.connected = True
         self.listening = False
+        self.server_controller.on_connect()
 
     def step(self):
         if self.listening:

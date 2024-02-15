@@ -108,6 +108,9 @@ class AppController:
                     tag="debug_window_menu_item", 
                     callback=lambda:self.menu_button_click(DebugWindow, "debug_window"),
                     check=True)
+            with dpg.menu(label="Model"):
+                dpg.add_menu_item(label="Save model", callback=self.save_model_window)
+                dpg.add_menu_item(label="Load model", callback=self.load_model_window)
 
     # Properly closes down the connection and threaded communicator
     def on_app_close(self):
@@ -149,9 +152,69 @@ class AppController:
                 for window in self.listened_tags[tag]:
                     window.receive_message(data[tag])
 
+    def save_model_window(self):
+        def save_model():
+            self.app_communicator.send_message(
+                {"save_model":dpg.get_value("save_location")}
+            )
+            dpg.delete_item("popup_window")
+
+        while(dpg.does_item_exist("popup_window")):
+            time.sleep(0.1)
+            
+        with dpg.mutex():
+            viewport_width = dpg.get_viewport_client_width()
+            viewport_height = dpg.get_viewport_client_height()
+
+            with dpg.window(label="Save model", modal=True, no_close=True, tag="popup_window") as modal_id:
+                dpg.add_input_text(label="Save location", 
+                                   tag='save_location')
+                dpg.add_button(label="Save", width=75, 
+                               user_data=(modal_id, True), 
+                               callback=save_model)
+                #dpg.add_same_line()
+                #dpg.add_button(label="Cancel", width=75, user_data=(modal_id, False), callback=selection_callback)
+
+        # guarantee these commands happen in another frame
+        dpg.split_frame()
+        width = dpg.get_item_width(modal_id)
+        height = dpg.get_item_height(modal_id)
+        dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
+
+    def load_model_window(self):
+        def load_model():
+            self.app_communicator.send_message(
+                {"load_model":dpg.get_value("load_location")}
+            )
+            dpg.delete_item("popup_window")
+
+        while(dpg.does_item_exist("popup_window")):
+            time.sleep(0.1)
+            
+        with dpg.mutex():
+            viewport_width = dpg.get_viewport_client_width()
+            viewport_height = dpg.get_viewport_client_height()
+
+            with dpg.window(label="Load model", modal=True, no_close=True, tag="popup_window") as modal_id:
+                dpg.add_input_text(label="Load location", 
+                                   tag='load_location')
+                dpg.add_button(label="Load", width=75, 
+                               user_data=(modal_id, True), 
+                               callback=load_model)
+                #dpg.add_same_line()
+                #dpg.add_button(label="Cancel", width=75, user_data=(modal_id, False), callback=selection_callback)
+
+        # guarantee these commands happen in another frame
+        dpg.split_frame()
+        width = dpg.get_item_width(modal_id)
+        height = dpg.get_item_height(modal_id)
+        dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
+
     def popup_box(self, title, message):
         # https://github.com/hoffstadt/DearPyGui/discussions/1002
         # guarantee these commands happen in the same frame
+        while(dpg.does_item_exist("popup_window")):
+            time.sleep(0.1)
         with dpg.mutex():
 
             viewport_width = dpg.get_viewport_client_width()
@@ -173,7 +236,6 @@ class AppController:
         
     def receive_message(self, data):
         # Handles all "other" messages, usually global or state-related
-        
         if("error" in data.keys()):
             self.popup_box("Error", data['error'])
         if("settings_state" in data.keys()):

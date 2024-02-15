@@ -17,7 +17,7 @@ from utils.general_utils import inverse_sigmoid
 from torch import nn
 from utils.system_utils import mkdir_p
 from plyfile import PlyData, PlyElement
-from utils.sh_utils import RGB2SH
+from utils.sh_utils import RGB2SH, SH2RGB
 try:
     from simple_knn._C import distCUDA2
     from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
@@ -60,10 +60,9 @@ class GaussianModel:
         self._rotation = torch.empty(0)
         self._opacity = torch.empty(0)
         self.max_radii2D = torch.empty(0)
-        self.optimizer = None
-        self.percent_dense = 0
-        self.initialized = False
+        
         self.setup_functions()
+        self.create_from_random_pcd()
 
     def on_settings_update(self, new_settings):
 
@@ -87,6 +86,17 @@ class GaussianModel:
                 self._opacity = self._opacity.to(self.settings.device)
                 self.max_radii2D = self.max_radii2D.to(self.settings.device)
                 self.background = self.background.to(self.settings.device)
+
+    def create_from_random_pcd(self):
+        # Since this data set has no colmap data, we start with random points
+        num_pts = 100_000
+        print(f"Generating random point cloud ({num_pts})...")
+        
+        # We create random points inside the bounds of the synthetic Blender scenes
+        xyz = np.random.random((num_pts, 3)) * 2.6 - 1.3
+        shs = np.random.random((num_pts, 3)) / 255.0
+        pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
+        self.create_from_pcd(pcd)
 
 
     @property
