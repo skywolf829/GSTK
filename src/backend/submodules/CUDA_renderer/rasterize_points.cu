@@ -107,7 +107,7 @@ RasterizeGaussiansCUDA(
 		viewmatrix.contiguous().data<float>(), 
 		projmatrix.contiguous().data<float>(),
 		use_buffers,
-		reinterpret_cast<float4*>(rgba_buffer.contiguous().data_ptr()),
+		rgba_buffer.contiguous().data<uint8_t>(),
 		depth_buffer.contiguous().data<float>(),
 		campos.contiguous().data<float>(),
 		tan_fovx,

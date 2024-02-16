@@ -272,7 +272,7 @@ renderCUDA(
 	float* __restrict__ final_T,
 	uint32_t* __restrict__ n_contrib,
 	const bool use_buffers,
-	const float4* __restrict__ rgba_buffer,
+	const uint8_t* __restrict__ rgba_buffer,
 	const float* __restrict__ depth_buffer,
 	const float* __restrict__ bg_color,
 	float* __restrict__ out_color)
@@ -307,12 +307,14 @@ renderCUDA(
 	uint32_t contributor = 0;
 	uint32_t last_contributor = 0;
 	float C[CHANNELS] = { 0 };
-	float4 pix_rgba = { 0 };
+	uint8_t pix_rgba[4]  = { 0 };
 	float pix_depth = 0.0f;
 	bool in_front_of_buffer = true;
 
 	if(inside && use_buffers){
-		pix_rgba = rgba_buffer[pix_id];
+		for(int i = 0; i < 4; i++){
+			pix_rgba[i] = rgba_buffer[4*pix_id+i];
+		}
 		pix_depth = depth_buffer[pix_id];
 	}
 
@@ -352,16 +354,16 @@ renderCUDA(
 			// First check if the depth of this gaussian is behind
 			// the depth buffer (if using)
 			if(use_buffers && in_front_of_buffer && depth > pix_depth){
-				float alpha = min(0.99f, pix_rgba.w);
+				float alpha = min(0.99f, pix_rgba[3] / 255.0f);
 				float test_T = T * (1 - alpha);
 				if (test_T < 0.0001f)
 				{
 					done = true;
 					continue;
 				}
-				C[0] += pix_rgba.x * alpha * T;
-				C[1] += pix_rgba.y * alpha * T;
-				C[2] += pix_rgba.z * alpha * T;
+				C[0] += (pix_rgba[0] / 255.0f) * alpha * T;
+				C[1] += (pix_rgba[1] / 255.0f) * alpha * T;
+				C[2] += (pix_rgba[2] / 255.0f) * alpha * T;
 				T = test_T;
 				in_front_of_buffer = false;
 			}
@@ -404,13 +406,13 @@ renderCUDA(
 		n_contrib[pix_id] = last_contributor;
 		if(use_buffers){
 			if(in_front_of_buffer){
-				float alpha = min(0.99f, pix_rgba.w);
+				float alpha = min(0.99f, pix_rgba[3] / 255.0f);
 				float test_T = T * (1 - alpha);
 				if (test_T >= 0.0001f)
 				{					
-					C[0] += pix_rgba.x * alpha * T;
-					C[1] += pix_rgba.y * alpha * T;
-					C[2] += pix_rgba.z * alpha * T;
+					C[0] += (pix_rgba[0] / 255.0f) * alpha * T;
+					C[1] += (pix_rgba[1] / 255.0f) * alpha * T;
+					C[2] += (pix_rgba[2] / 255.0f) * alpha * T;
 					T = test_T;
 					in_front_of_buffer = false;
 				}
@@ -435,7 +437,7 @@ void FORWARD::render(
 	float* final_T,
 	uint32_t* n_contrib,
 	const bool use_buffers,
-	const float4* rgba_buffer,
+	const uint8_t* rgba_buffer,
 	const float* depth_buffer,
 	const float* bg_color,
 	float* out_color)

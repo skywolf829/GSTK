@@ -59,6 +59,7 @@ class ServerController:
         self.average_communication_time = 0
         self.average_step_time = 0
         self.average_message_listening_time = 0
+        self.average_opengl_time = 0
         #self.main_thread.join()
         self.main_loop()
        
@@ -341,12 +342,16 @@ class ServerController:
         self.renderer_enabled = False
 
     def render(self):
-        #rgba_buffer, depth_buffer = self.opengl_renderer.render(self.render_cam)
-        #rgba_buffer = torch.tensor(rgba_buffer, dtype=torch.float32, device=self.settings.device) / 255.
-        #depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)*2 - 1
-        
-        render_package = self.model.render(self.render_cam) 
-            #rgba_buffer=rgba_buffer, depth_buffer = depth_buffer)
+        t0 = time.time()
+        rgba_buffer, depth_buffer = self.opengl_renderer.render(self.render_cam)
+        rgba_buffer = torch.tensor(rgba_buffer, dtype=torch.uint8, device=self.settings.device)
+        depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)*2 - 1
+        #rgba_buffer = None; depth_buffer = None
+        time_opengl = time.time() - t0
+        self.average_opengl_time = self.average_opengl_time*0.8 + time_opengl*0.2
+
+        render_package = self.model.render(self.render_cam,
+            rgba_buffer=rgba_buffer, depth_buffer = depth_buffer)
         img = torch.clamp(render_package['render'], min=0, max=1.0) * 255
         return img
         
@@ -466,6 +471,7 @@ class ServerController:
                 #    f"Send img: {self.average_communication_time * 1000 : 0.02f}ms, \t " + \
                 #    f"Msg listen: {self.average_message_listening_time * 1000 : 0.02f}ms, \t " + \
                 #    f"Full step: {self.average_step_time*1000:0.02f}ms")
+                print(f"Render {self.average_rendering_time*1000:0.02f}ms, OpenGL: {self.average_opengl_time*1000:0.02f}ms")
                 t = time.time()
 
             

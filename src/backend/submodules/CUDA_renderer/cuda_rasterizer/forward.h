@@ -60,7 +60,7 @@ namespace FORWARD
 		float* final_T,
 		uint32_t* n_contrib,
 		const bool use_buffers,
-		const float4* rgba_buffer,
+		const uint8_t* rgba_buffer,
 		const float* depth_buffer,
 		const float* bg_color,
 		float* out_color);

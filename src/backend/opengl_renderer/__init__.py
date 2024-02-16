@@ -99,34 +99,25 @@ class OpenGL_renderer():
 
         # Make the window's context current
         glfw.make_context_current(self.window)
+        #glfw.swap_interval(100)
 
-        glEnable(GL_DEPTH_TEST)
-        glDepthMask(GL_TRUE)
-    
         # Performs face culling
-        glEnable(GL_CULL_FACE)
-        glCullFace(GL_BACK)
-        glFrontFace(GL_CW)
+        #glEnable(GL_CULL_FACE)
+        #glCullFace(GL_BACK)
+        #glFrontFace(GL_CW)
         
         # Performs z-buffer testing
         glEnable(GL_DEPTH_TEST)
-        glDepthMask(GL_TRUE)
-        glDepthFunc(GL_LEQUAL)
-        glDepthRange(0.0, 1.0)
+        #glDepthMask(GL_TRUE)
+        #glDepthFunc(GL_LEQUAL)
+        #glDepthRange(0.0, 1.0)
 
-    def resize_window(self, w, h, fov_deg, near, far):
-        if(w == self.last_texture_size[0] and \
-           h == self.last_texture_size[1]):
-            return
-        #print(f"resizing to {w}x{h}")
-        #glutReshapeWindow(w,h)
-        glViewport(0, 0, w, h)
         
     def init_FBO(self, w, h):
         if(w == self.last_texture_size[0] and \
            h == self.last_texture_size[1]):
             return
-        glfw.make_context_current(self.window)
+        
         # Create a handle and assign a texture buffer to it
         self.renderedTexture = glGenTextures(1)
         # Bind the texture buffer to the GL_TEXTURE_2D target in the 
@@ -182,31 +173,28 @@ class OpenGL_renderer():
         """
         Clears the color and depth in the FBO
         """
-        # Use our initialized FBO instead of the default GLUT framebuffer
-        glBindFramebuffer(GL_FRAMEBUFFER, self.framebufferObject)
-        
         # Clears any color or depth information in the FBO
         glClearColor(0.0, 0.0, 0.0, 1.0)
         glClearDepth(1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         
-        # Unbind the FBO, relinquishing the GL_FRAMEBUFFER back to the window manager (i.e. GLUT)
-        glBindFramebuffer(GL_FRAMEBUFFER, 0)
 
     def render(self, render_cam : RenderCam):
+        #glfw.make_context_current(self.window)
         
-        # Use our initialized FBO instead of the default GLUT framebuffer
         self.init_FBO(render_cam.image_width,
                     render_cam.image_height)
-        # Clear FBO for new draw       
-        self.reset_FBO()
         
         # Bind FBO for render
         glBindFramebuffer(GL_FRAMEBUFFER, self.framebufferObject)
+        
+        # Clear FBO for new draw       
+        self.reset_FBO()
+        
 
         # Reset viewport location
         glViewport(0, 0, render_cam.image_width,
-                           render_cam.image_height)
+                render_cam.image_height)
         # Update projection matrix
         glMatrixMode(GL_PROJECTION)
         #glLoadIdentity()
@@ -215,20 +203,13 @@ class OpenGL_renderer():
         #               render_cam.znear, render_cam.zfar)
         glLoadMatrixf(render_cam.projection_matrix.cpu().numpy())
         glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        #glTranslatef(0.0, 0.0, -2.0)
-        '''
-        glLoadMatrixf(np.array([[1,0,0,0],
-                               [0,1,0,0],
-                               [0,0,1,0],
-                               [0,0,-2,1]], dtype=np.float32))
-        '''
+        #glLoadIdentity()
         glLoadMatrixf(render_cam.world_view_transform.cpu().numpy())
         
         for item in self.contents:
             item.render()
-
         glFlush()
+        
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         glReadBuffer(GL_COLOR_ATTACHMENT0)
 
@@ -244,8 +225,12 @@ class OpenGL_renderer():
         depth = np.frombuffer(depth, dtype=np.float32).reshape(
             render_cam.image_width, render_cam.image_height)
         
+        
+        #render = np.empty([render_cam.image_width, render_cam.image_height, 4], dtype=np.uint8)
+        #depth = np.empty([render_cam.image_width, render_cam.image_height], dtype=np.float32)
         # Unbind cleanup
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        
         #glutSwapBuffers()
         return render, depth
     
@@ -253,17 +238,15 @@ if __name__ == "__main__":
     a = OpenGL_renderer()
     cam = RenderCam(znear = 0.1, zfar=4000)
     a.add_item(Cube())
-    render, depth = a.render(cam)
+    
+    import torch
+    for _ in tqdm(range(10000)):
+        render, depth = a.render(cam)
+        r = torch.tensor(render, device="cuda", dtype=torch.uint8)
+        d = torch.tensor(depth, device="cuda", dtype=torch.float32)
+        torch.cuda.synchronize()
 
-    print(depth.min())
-    depth -= depth.min()
-    depth /= depth.max()
-    depth = depth[:,:,None].repeat(3,2)
-    depth = (depth*255).astype(np.uint8)
 
-    imageio.imwrite("glut.png", render)
-
-    imageio.imwrite("glut_depth.png", depth)
 
 
 

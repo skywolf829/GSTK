@@ -213,7 +213,7 @@ int CudaRasterizer::Rasterizer::forward(
 	const float* viewmatrix,
 	const float* projmatrix,
 	const bool use_buffers,
-	const float4* rgba_buffer,
+	const uint8_t* rgba_buffer,
 	const float* depth_buffer,
 	const float* cam_pos,
 	const float tan_fovx, float tan_fovy,
