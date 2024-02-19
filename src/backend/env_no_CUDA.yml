@@ -14,5 +14,4 @@ dependencies:
   - pip:
     - glfw
     - simplejpeg
-    - submodules/PyOpenGL
-    - submodules/PyOpenGL/accelerate
+    - pygfx

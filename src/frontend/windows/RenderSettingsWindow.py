@@ -6,6 +6,7 @@ class RenderSettingsWindow(Window):
         super().__init__("render_settings_window", app_controller)
 
         self.app_controller.register_message_listener(self, "renderer")
+        self.app_controller.register_message_listener(self, "connection")
         
         with dpg.window(label="Render settings", tag=self.tag, on_close=self.on_close):
         
@@ -52,23 +53,17 @@ class RenderSettingsWindow(Window):
 
         max_width = dpg.get_item_width("render_view_texture")
         max_height = dpg.get_item_height("render_view_texture")
+        fov = dpg.get_value("fov")
         w = int(scaling*min(max_width,dpg.get_item_width("render_window")))
         h = int(scaling*min(max_height,dpg.get_item_height("render_window")))
 
         dpg.set_value("effective_resolution", f"Resolution: {w}x{h}")
 
-        if(h>w):
-            fovy = dpg.get_value("fov")
-            fovx = dpg.get_value("fov") * w/h
-        else:
-            fovx = dpg.get_value("fov")
-            fovy = dpg.get_value("fov") * h/w
         render_settings = {
             'renderer_enabled': dpg.get_value('renderer_enabled'),
             "width" : w,
             "height" : h,
-            "fov_x" : fovx,
-            "fov_y" : fovy,
+            "fov" : fov,
             "near_plane" : dpg.get_value("near_plane"),
             "far_plane" : dpg.get_value("far_plane")
         }
@@ -98,3 +93,6 @@ class RenderSettingsWindow(Window):
             self.on_update_error(data['renderer_settings_updated_error'])
         if("settings_state" in data.keys()):
             self.on_receive_state(data['settings_state'])
+        #if "connection" in data.keys():
+        #    if data['connection']['connected']:
+        #        self.update_renderer_settings()

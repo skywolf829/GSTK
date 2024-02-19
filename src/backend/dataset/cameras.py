@@ -13,6 +13,7 @@ import torch
 from torch import nn
 import numpy as np
 from utils.graphics_utils import getWorld2View2, getProjectionMatrix, rotate_axis_angle
+from pygfx import PerspectiveCamera
 
 class Camera(nn.Module):
     def __init__(self, colmap_id, 
@@ -76,6 +77,26 @@ class MiniCam:
         self.full_proj_transform = full_proj_transform
         view_inv = torch.inverse(self.world_view_transform)
         self.camera_center = view_inv[3][:3]
+
+def cam_from_gfx(cam: PerspectiveCamera, canvas):  
+    d = "cuda" if torch.cuda.is_available() else "cpu"
+    wv = cam.view_matrix.copy()
+    p = cam.projection_matrix.copy()
+    #p[1,:] *= -1
+    wv[1,:] *= -1
+    world_view = torch.tensor(wv, dtype=torch.float32, device=d).T
+    full_proj = torch.tensor(p @ wv, dtype=torch.float32, device=d).T
+    #world_view[0:3,1] *= -1
+    #full_proj[0:3,1] *= -1
+    #full_proj = torch.tensor(cam.camera_matrix, dtype=torch.float32, device=d).T
+    #print(world_view)
+    #print(full_proj)
+    return MiniCam(
+        canvas.get_logical_size()[0], canvas.get_logical_size()[1], 
+        np.deg2rad(cam.fov), np.deg2rad(cam.fov),
+        cam.near, cam.far, 
+        world_view, full_proj
+    )
 
 class RenderCam:
     def __init__(self, 

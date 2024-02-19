@@ -267,20 +267,19 @@ class AppCommunicator(threading.Thread):
 
     # Tries to connect to server and updates app controller if necessary
     def try_server_connect(self, ip:str, port:int):
-        with self.lock:
-            if(self.connected):
-                print("Already connected, cannot connect again!")
-                return
-            try:
-                self.conn = connection.Client((ip, port), authkey=b"GRAVITY")
-                print(f"Successfully connected to {ip}:{port}")
-                self.connected = True
-                self.app_controller.distribute_message_data(
-                    {"connection": {"connected": True}}
-                )
-            except:
-                print(f"WARNING: {ip}:{port} is not available.")
-                self.connected = False
+        if(self.connected):
+            print("Already connected, cannot connect again!")
+            return
+        try:
+            self.conn = connection.Client((ip, port), authkey=b"GRAVITY")
+            print(f"Successfully connected to {ip}:{port}")
+            self.connected = True
+            self.app_controller.distribute_message_data(
+                {"connection": {"connected": True}}
+            )
+        except:
+            print(f"WARNING: {ip}:{port} is not available.")
+            self.connected = False
     
     # Runs infinitely to listen for messages (until close)
     def run(self):

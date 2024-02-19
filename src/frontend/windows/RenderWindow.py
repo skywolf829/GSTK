@@ -41,9 +41,14 @@ class RenderWindow(Window):
             dpg.add_item_resize_handler(callback=self.on_resize)
         
         with dpg.handler_registry(show=True):
-            dpg.add_mouse_release_handler(callback=self.on_mouse_left_release, button=dpg.mvMouseButton_Left)
+            
+            dpg.add_mouse_move_handler(callback=self.on_mouse_move)
+
             dpg.add_mouse_click_handler(callback=self.on_mouse_left_click, button=dpg.mvMouseButton_Left)
-            dpg.add_mouse_drag_handler(callback=self.on_mouse_left_drag, button=dpg.mvMouseButton_Left, threshold=5)
+            dpg.add_mouse_release_handler(callback=self.on_mouse_left_release, button=dpg.mvMouseButton_Left)
+
+            dpg.add_mouse_click_handler(callback=self.on_mouse_right_click, button=dpg.mvMouseButton_Right)
+            dpg.add_mouse_release_handler(callback=self.on_mouse_right_release, button=dpg.mvMouseButton_Right)
 
             dpg.add_key_down_handler(callback=self.on_key_down)
             dpg.add_key_release_handler(callback=self.on_key_release)
@@ -56,9 +61,9 @@ class RenderWindow(Window):
         self.last_dx = 0
         self.last_dy = 0
         
-  
     def update_window_size(self, force=False):
         if(self.resizing or force):
+            #print("Update_window_size")
             h = min(dpg.get_item_height(self.tag), self.max_tex_height)
             w = min(dpg.get_item_width(self.tag), self.max_tex_width)
 
@@ -66,9 +71,9 @@ class RenderWindow(Window):
             dpg.configure_item("render_view_image", width=w, height=h,
                 uv_max = (w/self.max_tex_width, h/self.max_tex_height))
             self.resizing = False
-            #if(self.app_controller.renderer_settings_window is not None):
-            #    self.app_controller.renderer_settings_window.update_renderer_settings()
-            
+
+            self.app_controller.renderer_settings_window.update_renderer_settings()
+
     def on_new_image(self, data):
         #print("Updating texture")
         data = decode_jpeg(data, fastdct=False, fastupsample=False)
@@ -92,87 +97,117 @@ class RenderWindow(Window):
             self.last_fps_update = time.time()
 
     def on_resize(self):
+        #print("resize window")
         self.resizing = True
     
-    def on_mouse_left_click(self):
-        pass
+    def on_mouse_move(self, data, position):
+        if(dpg.is_item_focused(self.tag)):
+            window_offset = dpg.get_item_pos(self.tag)
+            image_offset = dpg.get_item_pos('render_view_image')
+            
+            self.app_controller.app_communicator.send_message(
+                {"mouse":
+                    {"mouse_move":
+                        {
+                            "x": position[0] - window_offset[0] - image_offset[0],
+                            "y": position[1] - window_offset[1] - image_offset[1]
+                        }
+                    }
+                }
+            )
 
-    def on_mouse_left_drag(self, usr_data, direction):
-        if(not dpg.is_item_focused(self.tag)):
-            return
-        dx = direction[1] - self.last_dx
-        dy = -(direction[2] - self.last_dy)
-        self.app_controller.app_communicator.send_message(
-            {"camera_move":
-                {
-                "mouse_move": {
-                    "dx": dx,
-                    "dy": dy,
-                    "modifiers": self.modifiers
-                }}
-             }
-        )
-        self.last_dx = direction[1]
-        self.last_dy = direction[2]
+    def on_mouse_left_click(self):
+        if(dpg.is_item_focused(self.tag)):
+            self.app_controller.app_communicator.send_message(
+                {"mouse":
+                    {"mouse_click":
+                        {
+                            "button": 1
+                        }
+                    }
+                }
+            )
 
     def on_mouse_left_release(self):
         self.update_window_size()
-        self.last_dx=0
-        self.last_dy=0
+        if(dpg.is_item_focused(self.tag)):
+            self.app_controller.app_communicator.send_message(
+                {"mouse":
+                    {"mouse_release":
+                        {
+                            "button": 1
+                        }
+                    }
+                }
+            )
+    
+    def on_mouse_right_click(self):
+        if(dpg.is_item_focused(self.tag)):
+            self.app_controller.app_communicator.send_message(
+                {"mouse":
+                    {"mouse_click":
+                        {
+                            "button": 2
+                        }
+                    }
+                }
+            )
+
+    def on_mouse_right_release(self):
+        self.update_window_size()
+        if(dpg.is_item_focused(self.tag)):
+            self.app_controller.app_communicator.send_message(
+                {"mouse":
+                    {"mouse_release":
+                        {
+                            "button": 2
+                        }
+                    }
+                }
+            )
         
     def on_resize_viewport(self):
-        pass
+        self.resizing = True
+        #dpg.split_frame()
+        #self.app_controller.renderer_settings_window.update_renderer_settings()
 
     def on_key_down(self, user_data, key_code_data):
         if(not dpg.is_item_focused(self.tag)):
             return
         key_code = key_code_data[0]
         t = key_code_data[1]
-        right = 0
-        up = 0
-        if(key_code == dpg.mvKey_Left):
-            right -= 1
-        if(key_code == dpg.mvKey_Right):
-            right += 1
-        if(key_code == dpg.mvKey_Up):
-            up += 1
-        if(key_code == dpg.mvKey_Down):
-            up -= 1
-            
-        if(key_code == dpg.mvKey_Control and "control" not in self.modifiers):
-            self.modifiers.append("control")
-        if(key_code == dpg.mvKey_Shift and "shift" not in self.modifiers):
-            self.modifiers.append("shift")
-        if(key_code == dpg.mvKey_Alt and "alt" not in self.modifiers):
-            self.modifiers.append("alt")
 
+        self.app_controller.app_communicator.send_message(
+            {"keyboard":
+                {
+                "key_pressed": {
+                    "keycode": key_code
+                }}
+            }
+        )
 
-        if(up != 0 or right != 0):
-            self.app_controller.app_communicator.send_message(
-                {"camera_move":
-                    {
-                    "key_pressed": {
-                        "up": up,
-                        "right": right
-                    }}
-                }
-            )
+    def on_key_release(self, user_data, key_code_data):
+        if(not dpg.is_item_focused(self.tag)):
+            return
+        key_code = key_code_data[0]
+        t = key_code_data[1]
 
-    def on_key_release(self, user_data, key_code):
-        if(key_code == dpg.mvKey_Control and "control" in self.modifiers):
-            self.modifiers.remove("control")
-        if(key_code == dpg.mvKey_Shift and "shift" in self.modifiers):
-            self.modifiers.remove("shift")
-        if(key_code == dpg.mvKey_Alt and "alt" in self.modifiers):
-            self.modifiers.remove("alt")
+        self.app_controller.app_communicator.send_message(
+            {"keyboard":
+                {
+                "key_released": {
+                    "keycode": key_code
+                }}
+            }
+        )
 
     def on_mouse_wheel(self, user_data, data):
         self.app_controller.app_communicator.send_message(
-            {"camera_move":
+            {"mouse":
                 {
-                "scrollwheel": {
-                    "val": data
-                }
+                "wheel": {
+                        "dy": data
+                    }
                 }
              }
         )

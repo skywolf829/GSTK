@@ -5,7 +5,7 @@ from model import GaussianModel
 from trainer import Trainer
 from argparse import ArgumentParser
 from utils.system_utils import mkdir_p
-from opengl_renderer import OpenGL_renderer, Cube
+from opengl_renderer import WGPU_renderer
 from settings import Settings
 import threading
 import multiprocessing.connection as connection
@@ -13,9 +13,10 @@ import signal
 import time
 import torch
 import numpy as np
-from dataset.cameras import RenderCam
+from dataset.cameras import cam_from_gfx
 import multiprocessing
 from simplejpeg import encode_jpeg
+
 #from torchvision.io import encode_jpeg as encode_jpeg_torch
 #import yappi
 
@@ -38,9 +39,9 @@ class ServerController:
         self.settings = Settings()
         self.model = GaussianModel(self.settings, debug=self.DEBUG)
         self.trainer = Trainer(self.model, self.settings, debug=self.DEBUG)
-        self.opengl_renderer = None
+        self.opengl_renderer = WGPU_renderer()
+        self.opengl_renderer.add_test_scene()
         self.dataset = None
-        self.render_cam = RenderCam()
 
         self.loading = False
         self.renderer_enabled = True
@@ -48,19 +49,13 @@ class ServerController:
         
         self.server_communicator = ServerCommunicator(self, ip, port)
 
-        #self.main_thread = threading.Thread(target=self.main_loop, 
-        #                                      args=(), 
-        #                                      daemon=True,
-        #                                      name="TrainRenderThread")
-        #self.main_thread.start()
-
         self.average_training_time = 0
         self.average_rendering_time = 0
         self.average_communication_time = 0
         self.average_step_time = 0
         self.average_message_listening_time = 0
         self.average_opengl_time = 0
-        #self.main_thread.join()
+        
         self.main_loop()
        
     def process_message(self,data):
@@ -108,10 +103,12 @@ class ServerController:
         if("debug" in data.keys()):
             self.on_debug_toggle(data['debug'])
 
-        if("camera_move" in data.keys() and self.renderer_enabled):
-            self.render_cam.process_camera_move(
-                data['camera_move'])
+        if("mouse" in data.keys() and self.renderer_enabled):
+            self.opengl_renderer.simulate_mouse(data['mouse'])
         
+        if("keyboard" in data.keys() and self.renderer_enabled):
+            self.opengl_renderer.simulate_mouse(data['keyboard'])
+
         if("save_model" in data.keys()):
             self.on_save_model(data['save_model'])
 
@@ -248,12 +245,9 @@ class ServerController:
 
     def update_renderer_settings(self, data):
         self.renderer_enabled = data['renderer_enabled']
-        self.render_cam.image_width = data['width']
-        self.render_cam.image_height = data['height']
-        self.render_cam.FoVx = np.deg2rad(data['fov_x'])
-        self.render_cam.FoVy = np.deg2rad(data['fov_y'])
-        self.render_cam.znear = data['near_plane']
-        self.render_cam.zfar = data['far_plane']
+        self.opengl_renderer.resize(data['width'], data['height'])
+        self.opengl_renderer.camera.fov = data['fov']
+        self.opengl_renderer.camera.depth_range = [data['near_plane'],data['far_plane']]
 
     def on_train_start(self):
         
@@ -328,9 +322,9 @@ class ServerController:
             "renderer": {
                 "settings_state":{
                     'renderer_enabled': self.renderer_enabled,
-                    "fov": max(self.render_cam.FoVx, self.render_cam.FoVy) * 180. / np.pi,
-                    "near_plane": self.render_cam.znear,
-                    "far_plane": self.render_cam.zfar
+                    "fov": self.opengl_renderer.camera.fov,
+                    "near_plane": self.opengl_renderer.camera.near,
+                    "far_plane": self.opengl_renderer.camera.far
                 }
             }                  
         }
@@ -343,14 +337,16 @@ class ServerController:
 
     def render(self):
         t0 = time.time()
-        rgba_buffer, depth_buffer = self.opengl_renderer.render(self.render_cam)
+        rgba_buffer, depth_buffer = self.opengl_renderer.render()
         rgba_buffer = torch.tensor(rgba_buffer, dtype=torch.uint8, device=self.settings.device)
-        depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)*2 - 1
+        #print(f"{depth_buffer.min()} {depth_buffer.max()}")
+        depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)#*2 - 1
         #rgba_buffer = None; depth_buffer = None
         time_opengl = time.time() - t0
         self.average_opengl_time = self.average_opengl_time*0.8 + time_opengl*0.2
 
-        render_package = self.model.render(self.render_cam,
+        render_package = self.model.render(
+            cam_from_gfx(self.opengl_renderer.camera, self.opengl_renderer.canvas),
             rgba_buffer=rgba_buffer, depth_buffer = depth_buffer)
         img = torch.clamp(render_package['render'], min=0, max=1.0) * 255
         return img
@@ -445,8 +441,8 @@ class ServerController:
             return
 
     def main_loop(self):
-        self.opengl_renderer = OpenGL_renderer()
-        self.opengl_renderer.add_item(Cube())
+        #self.opengl_renderer = OpenGL_renderer()
+        #self.opengl_renderer.add_item(Cube())
 
         t = time.time()
         while(True):
@@ -465,13 +461,14 @@ class ServerController:
             
             self.average_step_time = self.average_step_time*0.8 + 0.2*(time.time()-t_start)
 
-            if(time.time() > t + 1):
+            if(time.time() > t + 1 and self.server_communicator.connected):
                 #print(f"Render: {1/(1e-12+self.average_rendering_time):0.02f} FPS, \t " + \
                 #    f"Train: {1/(1e-12+self.average_training_time) : 0.02f} FPS, \t " + \
                 #    f"Send img: {self.average_communication_time * 1000 : 0.02f}ms, \t " + \
                 #    f"Msg listen: {self.average_message_listening_time * 1000 : 0.02f}ms, \t " + \
                 #    f"Full step: {self.average_step_time*1000:0.02f}ms")
-                print(f"Render {self.average_rendering_time*1000:0.02f}ms, OpenGL: {self.average_opengl_time*1000:0.02f}ms")
+                print(f"Train [{self.trainer._iteration}/{self.settings.iterations}]: {self.average_training_time*1000:0.02f}ms, " + \
+                      f"Render {self.average_rendering_time*1000:0.02f}ms")
                 t = time.time()
 
             
