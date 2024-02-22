@@ -104,13 +104,13 @@ class RenderWindow(Window):
         if(dpg.is_item_focused(self.tag)):
             window_offset = dpg.get_item_pos(self.tag)
             image_offset = dpg.get_item_pos('render_view_image')
-            
+            scaling = dpg.get_value('resolution_scaling')
             self.app_controller.app_communicator.send_message(
                 {"mouse":
                     {"mouse_move":
                         {
-                            "x": position[0] - window_offset[0] - image_offset[0],
-                            "y": position[1] - window_offset[1] - image_offset[1]
+                            "x": (position[0] - window_offset[0] - image_offset[0])*scaling,
+                            "y": (position[1] - window_offset[1] - image_offset[1])*scaling
                         }
                     }
                 }

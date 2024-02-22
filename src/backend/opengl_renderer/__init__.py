@@ -5,10 +5,13 @@ from wgpu.gui.offscreen import WgpuCanvas as WgpuCanvas_offscreen
 from pygfx.renderers.wgpu._blender import *
 import pygfx as gfx
 import numpy as np
-from tqdm import tqdm
 from wgpu.backends.wgpu_native import GPUTexture
-import imageio.v3 as iio
 import wgpu
+
+class custom_gizmo(gfx.TransformGizmo):
+    def process_event(self, event):
+        super().process_event(event)
+
 
 class WGPU_renderer():
     def __init__(self, offscreen=True):
@@ -24,6 +27,8 @@ class WGPU_renderer():
             self.canvas = WgpuCanvas_offscreen()
         else:
             self.canvas = WgpuCanvas()
+        self.canvas._max_fps = 500
+        self.canvas._vsync = False
         self.renderer = gfx.renderers.WgpuRenderer(
             self.canvas, 
             #self.rgba_texture,
@@ -31,15 +36,19 @@ class WGPU_renderer():
             pixel_ratio=1.0)
         self.viewport = gfx.Viewport(self.renderer)
 
-        self.camera = gfx.PerspectiveCamera(50, depth_range=[0.01, 100])
+        self.camera = gfx.PerspectiveCamera(70, depth_range=[0.01, 100])
 
         self.scene = gfx.Scene()        
-        self.scene.add(gfx.Background(None, gfx.BackgroundMaterial("#000")))
+        #self.scene.add(gfx.Background(None, gfx.BackgroundMaterial("#000")))
 
         #self.camera.show_object(self.scene)
 
         self.canvas.request_draw(self.draw)
-        self.controller = gfx.OrbitController(self.camera, register_events=self.renderer)
+        self.controller = gfx.OrbitController(self.camera, 
+            register_events=self.renderer, auto_update=True)
+        self.camera.local.z = 10
+        #self.camera.look_at((0,0,0))
+        self.camera.show_pos((0,0,0))
 
     def add_test_scene(self):
 
@@ -54,12 +63,16 @@ class WGPU_renderer():
 
     def draw(self):
         self.renderer.render(self.scene, self.camera)
-        #self.viewport.render(self.gizmo, self.camera)
+        #self.viewport.render(self.gizmo, self.camera) # To draw on top
         self.renderer.flush()
 
     def render(self):
         
         # Render the scene
+        if(len(self.scene.children) == 0):
+            self.controller.tick()
+            #self.canvas.draw()
+            return None, None
         rgba = np.asarray(self.canvas.draw())
 
         

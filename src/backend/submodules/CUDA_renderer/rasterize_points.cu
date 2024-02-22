@@ -88,7 +88,7 @@ RasterizeGaussiansCUDA(
 	  {
 		M = sh.size(1);
       }
-
+	  //return std::make_tuple(rendered, out_color, radii, geomBuffer, binningBuffer, imgBuffer);
 	  rendered = CudaRasterizer::Rasterizer::forward(
 	    geomFunc,
 		binningFunc,

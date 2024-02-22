@@ -93,6 +93,6 @@ class RenderSettingsWindow(Window):
             self.on_update_error(data['renderer_settings_updated_error'])
         if("settings_state" in data.keys()):
             self.on_receive_state(data['settings_state'])
-        #if "connection" in data.keys():
-        #    if data['connection']['connected']:
-        #        self.update_renderer_settings()
+        if "connected" in data.keys():
+            if data['connected']:
+                self.update_renderer_settings()

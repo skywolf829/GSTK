@@ -274,9 +274,6 @@ class AppCommunicator(threading.Thread):
             self.conn = connection.Client((ip, port), authkey=b"GRAVITY")
             print(f"Successfully connected to {ip}:{port}")
             self.connected = True
-            self.app_controller.distribute_message_data(
-                {"connection": {"connected": True}}
-            )
         except:
             print(f"WARNING: {ip}:{port} is not available.")
             self.connected = False

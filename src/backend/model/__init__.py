@@ -235,7 +235,8 @@ class GaussianModel:
 
         self.active_sh_degree = self.settings.sh_degree
 
-    def render(self, viewpoint_camera, scaling_modifier = 1.0, rgba_buffer = None, depth_buffer = None):
+    def render(self, viewpoint_camera, scaling_modifier = 1.0, 
+               rgba_buffer = None, depth_buffer = None):
         """
         Render the scene. 
         

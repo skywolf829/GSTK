@@ -40,7 +40,7 @@ class ServerController:
         self.model = GaussianModel(self.settings, debug=self.DEBUG)
         self.trainer = Trainer(self.model, self.settings, debug=self.DEBUG)
         self.opengl_renderer = WGPU_renderer()
-        self.opengl_renderer.add_test_scene()
+        #self.opengl_renderer.add_test_scene()
         self.dataset = None
 
         self.loading = False
@@ -305,6 +305,13 @@ class ServerController:
     def on_connect(self):
 
         # Send messages for each of the objects to send settings state for
+        self.server_communicator.send_message(
+            {"connection": {
+                "connected": True
+                }
+            }
+        )
+
         data =  {
             "other": {
                 "settings_state": self.settings.params, 
@@ -338,12 +345,13 @@ class ServerController:
     def render(self):
         t0 = time.time()
         rgba_buffer, depth_buffer = self.opengl_renderer.render()
-        rgba_buffer = torch.tensor(rgba_buffer, dtype=torch.uint8, device=self.settings.device)
-        #print(f"{depth_buffer.min()} {depth_buffer.max()}")
-        depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)#*2 - 1
+        if (rgba_buffer is not None and depth_buffer is not None):
+            rgba_buffer = torch.tensor(rgba_buffer, dtype=torch.uint8, device=self.settings.device)
+            depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)#*2 - 1
         #rgba_buffer = None; depth_buffer = None
         time_opengl = time.time() - t0
         self.average_opengl_time = self.average_opengl_time*0.8 + time_opengl*0.2
+
 
         render_package = self.model.render(
             cam_from_gfx(self.opengl_renderer.camera, self.opengl_renderer.canvas),
@@ -392,17 +400,17 @@ class ServerController:
         self.average_message_listening_time = self.average_message_listening_time*0.8 + t_messages*0.2
 
     def render_screen_image(self):
+        
+        t0 = time.time()
+
         if(self.model.initialized and self.renderer_enabled):
-            
-            t0 = time.time()
             img = self.render()
-            render_time = time.time() - t0
-            self.average_rendering_time = self.average_rendering_time*0.8 + render_time*0.2
-            t0 = time.time()
             img_jpg = self.encode_img(img)
             self.send_render_image(img_jpg)
-            comm_this_step = time.time() - t0
-            self.average_communication_time = self.average_communication_time*0.8 + comm_this_step*0.2
+            
+        
+        render_time = time.time() - t0
+        self.average_rendering_time = self.average_rendering_time*0.8 + render_time*0.2
 
     def do_train_step(self):
         if(self.trainer.training):
@@ -441,8 +449,7 @@ class ServerController:
             return
 
     def main_loop(self):
-        #self.opengl_renderer = OpenGL_renderer()
-        #self.opengl_renderer.add_item(Cube())
+        
 
         t = time.time()
         while(True):
@@ -467,7 +474,8 @@ class ServerController:
                 #    f"Send img: {self.average_communication_time * 1000 : 0.02f}ms, \t " + \
                 #    f"Msg listen: {self.average_message_listening_time * 1000 : 0.02f}ms, \t " + \
                 #    f"Full step: {self.average_step_time*1000:0.02f}ms")
-                print(f"Train [{self.trainer._iteration}/{self.settings.iterations}]: {self.average_training_time*1000:0.02f}ms, " + \
+                print(f"[{self.trainer._iteration}/{self.settings.iterations}] " + \
+                      f"train: {self.average_training_time*1000:0.02f}ms, " + \
                       f"Render {self.average_rendering_time*1000:0.02f}ms")
                 t = time.time()
 

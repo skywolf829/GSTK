@@ -229,7 +229,7 @@ class GaussianRasterizer(nn.Module):
         use_buffers = True
         if rgba_buffer is None or depth_buffer is None:
             use_buffers = False
-            rgba_buffer = torch.Tensor([])
+            rgba_buffer = torch.empty([0], dtype=torch.uint8)
             depth_buffer = torch.Tensor([])
 
         # Invoke C++/CUDA rasterization routine
