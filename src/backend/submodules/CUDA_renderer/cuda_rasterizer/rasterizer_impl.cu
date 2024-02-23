@@ -212,9 +212,10 @@ int CudaRasterizer::Rasterizer::forward(
 	const float* cov3D_precomp,
 	const float* viewmatrix,
 	const float* projmatrix,
-	const bool use_buffers,
 	const uint8_t* rgba_buffer,
 	const float* depth_buffer,
+	const uint8_t* selection_mask,
+	const float selection_alpha_modifier,
 	const float* cam_pos,
 	const float tan_fovx, float tan_fovy,
 	const bool prefiltered,
@@ -333,9 +334,10 @@ int CudaRasterizer::Rasterizer::forward(
 		geomState.conic_opacity,
 		imgState.accum_alpha,
 		imgState.n_contrib,
-		use_buffers,
 		rgba_buffer,
 		depth_buffer,
+		selection_mask,
+		selection_alpha_modifier,
 		background,
 		out_color), debug)
 

@@ -271,9 +271,10 @@ renderCUDA(
 	const float4* __restrict__ conic_opacity,
 	float* __restrict__ final_T,
 	uint32_t* __restrict__ n_contrib,
-	const bool use_buffers,
 	const uint8_t* __restrict__ rgba_buffer,
 	const float* __restrict__ depth_buffer,
+	const uint8_t* __restrict__ selection_mask,
+	const float selection_alpha_modifier,
 	const float* __restrict__ bg_color,
 	float* __restrict__ out_color)
 {
@@ -300,6 +301,7 @@ renderCUDA(
 	__shared__ int collected_id[BLOCK_SIZE];
 	__shared__ float2 collected_xy[BLOCK_SIZE];
 	__shared__ float collected_depth[BLOCK_SIZE];
+	__shared__ bool collected_selection_mask[BLOCK_SIZE];
 	__shared__ float4 collected_conic_opacity[BLOCK_SIZE];
 
 	// Initialize helper variables
@@ -310,8 +312,10 @@ renderCUDA(
 	uint8_t pix_rgba[4]  = { 0 };
 	float pix_depth = 0.0f;
 	bool in_front_of_buffer = true;
+	bool use_buffer = rgba_buffer != nullptr && depth_buffer != nullptr;
+	bool use_selection_mask = selection_mask != nullptr;
 
-	if(inside && use_buffers){
+	if(inside && use_buffer){
 		for(int i = 0; i < 4; i++){
 			pix_rgba[i] = rgba_buffer[4*pix_id+i];
 		}
@@ -335,6 +339,10 @@ renderCUDA(
 			collected_xy[block.thread_rank()] = points_xy_image[coll_id];
 			collected_depth[block.thread_rank()] = depths[coll_id];
 			collected_conic_opacity[block.thread_rank()] = conic_opacity[coll_id];
+			if(use_selection_mask){
+				// Convert uint8_t to bool because torch doesn't have native bool
+				collected_selection_mask[block.thread_rank()] = (bool)selection_mask[coll_id];
+			}
 		}
 		block.sync();
 
@@ -353,7 +361,7 @@ renderCUDA(
 
 			// First check if the depth of this gaussian is behind
 			// the depth buffer (if using)
-			if(use_buffers && in_front_of_buffer && depth > pix_depth){
+			if(use_buffer && depth > pix_depth){
 				float alpha = min(0.99f, pix_rgba[3] / 255.0f);
 				float test_T = T * (1 - alpha);
 				if (test_T < 0.0001f)
@@ -377,6 +385,8 @@ renderCUDA(
 			// and its exponential falloff from mean.
 			// Avoid numerical instabilities (see paper appendix). 
 			float alpha = min(0.99f, con_o.w * exp(power));
+			float alpha_mod = use_selection_mask ? collected_selection_mask[j] : 1.0;
+			alpha *= alpha_mod;
 			if (alpha < 1.0f / 255.0f)
 				continue;
 			float test_T = T * (1 - alpha);
@@ -404,7 +414,7 @@ renderCUDA(
 	{
 		final_T[pix_id] = T;
 		n_contrib[pix_id] = last_contributor;
-		if(use_buffers){
+		if(use_buffer){
 			if(in_front_of_buffer){
 				float alpha = min(0.99f, pix_rgba[3] / 255.0f);
 				float test_T = T * (1 - alpha);
@@ -436,9 +446,10 @@ void FORWARD::render(
 	const float4* conic_opacity,
 	float* final_T,
 	uint32_t* n_contrib,
-	const bool use_buffers,
 	const uint8_t* rgba_buffer,
 	const float* depth_buffer,
+	const uint8_t* selection_mask,
+	const float selection_alpha_modifier,
 	const float* bg_color,
 	float* out_color)
 {
@@ -452,9 +463,10 @@ void FORWARD::render(
 		conic_opacity,
 		final_T,
 		n_contrib,
-		use_buffers,
 		rgba_buffer,
 		depth_buffer,
+		selection_mask,
+		selection_alpha_modifier,
 		bg_color,
 		out_color);
 }

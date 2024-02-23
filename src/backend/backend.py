@@ -5,7 +5,7 @@ from model import GaussianModel
 from trainer import Trainer
 from argparse import ArgumentParser
 from utils.system_utils import mkdir_p
-from opengl_renderer import WGPU_renderer
+from primitive_renderer import WebGPU_renderer
 from settings import Settings
 import threading
 import multiprocessing.connection as connection
@@ -14,7 +14,6 @@ import time
 import torch
 import numpy as np
 from dataset.cameras import cam_from_gfx
-import multiprocessing
 from simplejpeg import encode_jpeg
 
 #from torchvision.io import encode_jpeg as encode_jpeg_torch
@@ -39,8 +38,9 @@ class ServerController:
         self.settings = Settings()
         self.model = GaussianModel(self.settings, debug=self.DEBUG)
         self.trainer = Trainer(self.model, self.settings, debug=self.DEBUG)
-        self.opengl_renderer = WGPU_renderer()
-        #self.opengl_renderer.add_test_scene()
+        self.primitive_renderer = WebGPU_renderer()
+        self.primitive_renderer.add_selector()
+        self.primitive_renderer.activate_selector()
         self.dataset = None
 
         self.loading = False
@@ -104,10 +104,10 @@ class ServerController:
             self.on_debug_toggle(data['debug'])
 
         if("mouse" in data.keys() and self.renderer_enabled):
-            self.opengl_renderer.simulate_mouse(data['mouse'])
+            self.primitive_renderer.simulate_mouse(data['mouse'])
         
         if("keyboard" in data.keys() and self.renderer_enabled):
-            self.opengl_renderer.simulate_mouse(data['keyboard'])
+            self.primitive_renderer.simulate_mouse(data['keyboard'])
 
         if("save_model" in data.keys()):
             self.on_save_model(data['save_model'])
@@ -245,9 +245,9 @@ class ServerController:
 
     def update_renderer_settings(self, data):
         self.renderer_enabled = data['renderer_enabled']
-        self.opengl_renderer.resize(data['width'], data['height'])
-        self.opengl_renderer.camera.fov = data['fov']
-        self.opengl_renderer.camera.depth_range = [data['near_plane'],data['far_plane']]
+        self.primitive_renderer.resize(data['width'], data['height'])
+        self.primitive_renderer.camera.fov = data['fov']
+        self.primitive_renderer.camera.depth_range = [data['near_plane'],data['far_plane']]
 
     def on_train_start(self):
         
@@ -329,9 +329,9 @@ class ServerController:
             "renderer": {
                 "settings_state":{
                     'renderer_enabled': self.renderer_enabled,
-                    "fov": self.opengl_renderer.camera.fov,
-                    "near_plane": self.opengl_renderer.camera.near,
-                    "far_plane": self.opengl_renderer.camera.far
+                    "fov": self.primitive_renderer.camera.fov,
+                    "near_plane": self.primitive_renderer.camera.near,
+                    "far_plane": self.primitive_renderer.camera.far
                 }
             }                  
         }
@@ -344,18 +344,17 @@ class ServerController:
 
     def render(self):
         t0 = time.time()
-        rgba_buffer, depth_buffer = self.opengl_renderer.render()
-        if (rgba_buffer is not None and depth_buffer is not None):
-            rgba_buffer = torch.tensor(rgba_buffer, dtype=torch.uint8, device=self.settings.device)
-            depth_buffer = torch.tensor(depth_buffer, dtype=torch.float32, device=self.settings.device)#*2 - 1
-        #rgba_buffer = None; depth_buffer = None
+        
+        rgba_buffer, depth_buffer = self.primitive_renderer.render(self.settings)
+        selection_mask = self.primitive_renderer.get_selection_mask(self.model.get_xyz)
+        
         time_opengl = time.time() - t0
         self.average_opengl_time = self.average_opengl_time*0.8 + time_opengl*0.2
 
 
         render_package = self.model.render(
-            cam_from_gfx(self.opengl_renderer.camera, self.opengl_renderer.canvas),
-            rgba_buffer=rgba_buffer, depth_buffer = depth_buffer)
+            cam_from_gfx(self.primitive_renderer.camera, self.primitive_renderer.canvas),
+            rgba_buffer=rgba_buffer, depth_buffer = depth_buffer, selection_mask=selection_mask)
         img = torch.clamp(render_package['render'], min=0, max=1.0) * 255
         return img
         

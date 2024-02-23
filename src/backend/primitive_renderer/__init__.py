@@ -7,18 +7,16 @@ import pygfx as gfx
 import numpy as np
 from wgpu.backends.wgpu_native import GPUTexture
 import wgpu
+from primitive_renderer.selectors import Selector
+import torch
 
-class custom_gizmo(gfx.TransformGizmo):
-    def process_event(self, event):
-        super().process_event(event)
-
-
-class WGPU_renderer():
+class WebGPU_renderer():
     def __init__(self, offscreen=True):
         self.offscreen = offscreen
         self.simulated_mouse_pos = [0,0]
         self.modifiers = []
         self.buttons = []
+        self.should_render = False
 
         self.init_renderer()
 
@@ -50,6 +48,17 @@ class WGPU_renderer():
         #self.camera.look_at((0,0,0))
         self.camera.show_pos((0,0,0))
 
+    def add_selector(self, mesh_type="cube"):
+        
+        self.selector = Selector(self.scene, mesh_type)
+        self.selector.gizmo.add_default_event_handlers(self.viewport, self.camera)
+
+    def activate_selector(self):
+        self.selector.set_active()
+    
+    def deactivate_selector(self):
+        self.selector.set_inactive()
+
     def add_test_scene(self):
 
         self.cube = gfx.BoxHelper(size=1, thickness=4)
@@ -62,16 +71,15 @@ class WGPU_renderer():
         self.camera.show_object(self.scene)
 
     def draw(self):
-        self.renderer.render(self.scene, self.camera)
-        #self.viewport.render(self.gizmo, self.camera) # To draw on top
+        self.viewport.render(self.scene, self.camera)
         self.renderer.flush()
 
-    def render(self):
+    def controller_tick(self):
+        self.controller.tick()
         
-        # Render the scene
-        if(len(self.scene.children) == 0):
-            self.controller.tick()
-            #self.canvas.draw()
+    def render(self, settings):
+        if(not self.selector.is_active):
+            self.controller_tick()
             return None, None
         rgba = np.asarray(self.canvas.draw())
 
@@ -94,7 +102,16 @@ class WGPU_renderer():
             t.size), dtype=np.float32
         ).reshape(t.height, t.width)
         
-        return rgba, depth
+        rgba_buffer = torch.tensor(rgba, dtype=torch.uint8, device=settings.device)
+        depth_buffer = torch.tensor(depth, dtype=torch.float32, device=settings.device)#*2 - 1
+
+        return rgba_buffer, depth_buffer
+
+    def get_selection_mask(self, points : torch.Tensor):
+        if(self.selector.is_active):
+            return self.selector.points_in_bounds(points)
+        else:
+            return None
 
     def resize(self, w, h):
         self.canvas.set_logical_size(w, h)
@@ -211,7 +228,7 @@ class WGPU_renderer():
 
 
 if __name__ == "__main__":
-    r = WGPU_renderer(offscreen=False)
+    r = WebGPU_renderer(offscreen=False)
     r.add_test_scene()
     print(r.canvas.get_logical_size())
     run()

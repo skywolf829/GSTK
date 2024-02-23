@@ -30,7 +30,7 @@ def rasterize_gaussians(
     raster_settings,
     rgba_buffer,
     depth_buffer,
-    use_buffers
+    selection_mask
 ):
     return _RasterizeGaussians.apply(
         means3D,
@@ -44,7 +44,7 @@ def rasterize_gaussians(
         raster_settings,
         rgba_buffer,
         depth_buffer,
-        use_buffers
+        selection_mask
     )
 
 class _RasterizeGaussians(torch.autograd.Function):
@@ -62,7 +62,7 @@ class _RasterizeGaussians(torch.autograd.Function):
         raster_settings,
         rgba_buffer,
         depth_buffer,
-        use_buffers
+        selection_mask
     ):
 
         # Restructure arguments the way that the C++ lib expects them
@@ -77,9 +77,10 @@ class _RasterizeGaussians(torch.autograd.Function):
             cov3Ds_precomp,
             raster_settings.viewmatrix,
             raster_settings.projmatrix,
-            use_buffers,
             rgba_buffer,
             depth_buffer,
+            selection_mask,
+            raster_settings.alpha_modifier,
             raster_settings.tanfovx,
             raster_settings.tanfovy,
             raster_settings.image_height,
@@ -176,6 +177,7 @@ class GaussianRasterizationSettings(NamedTuple):
     tanfovy : float
     bg : torch.Tensor
     scale_modifier : float
+    alpha_modifier : float
     viewmatrix : torch.Tensor
     projmatrix : torch.Tensor
     sh_degree : int
@@ -204,7 +206,8 @@ class GaussianRasterizer(nn.Module):
                 scales = None, rotations = None, 
                 cov3D_precomp = None,
                 rgba_buffer = None,
-                depth_buffer = None):
+                depth_buffer = None,
+                selection_mask = None):
         
         raster_settings = self.raster_settings
 
@@ -226,12 +229,11 @@ class GaussianRasterizer(nn.Module):
         if cov3D_precomp is None:
             cov3D_precomp = torch.Tensor([])
 
-        use_buffers = True
         if rgba_buffer is None or depth_buffer is None:
-            use_buffers = False
             rgba_buffer = torch.empty([0], dtype=torch.uint8)
             depth_buffer = torch.Tensor([])
-
+        if(selection_mask is None):
+            selection_mask = torch.empty([0], dtype=torch.uint8)
         # Invoke C++/CUDA rasterization routine
         return rasterize_gaussians(
             means3D,
@@ -245,6 +247,6 @@ class GaussianRasterizer(nn.Module):
             raster_settings,
             rgba_buffer,
             depth_buffer,
-            use_buffers
+            selection_mask
         )
 

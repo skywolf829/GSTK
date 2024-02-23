@@ -235,8 +235,8 @@ class GaussianModel:
 
         self.active_sh_degree = self.settings.sh_degree
 
-    def render(self, viewpoint_camera, scaling_modifier = 1.0, 
-               rgba_buffer = None, depth_buffer = None):
+    def render(self, viewpoint_camera, scaling_modifier = 1.0, alpha_modifier = 0.5,
+               rgba_buffer = None, depth_buffer = None, selection_mask = None):
         """
         Render the scene. 
         
@@ -275,6 +275,7 @@ class GaussianModel:
             bg=self.background if self.background is not None \
                 else torch.rand([3], device=self.settings.device, dtype=torch.float32),
             scale_modifier=scaling_modifier,
+            alpha_modifier=alpha_modifier,
             viewmatrix=viewpoint_camera.world_view_transform,
             projmatrix=viewpoint_camera.full_proj_transform,
             sh_degree=self.active_sh_degree,
@@ -307,7 +308,8 @@ class GaussianModel:
             scales = scales,
             rotations = rotations,
             rgba_buffer = rgba_buffer,
-            depth_buffer = depth_buffer)
+            depth_buffer = depth_buffer,
+            selection_mask = selection_mask)
 
         # Those Gaussians that were frustum culled or had a radius of 0 were not visible.
         # They will be excluded from value updates used in the splitting criteria.

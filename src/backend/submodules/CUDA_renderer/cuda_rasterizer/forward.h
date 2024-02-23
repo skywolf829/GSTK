@@ -59,9 +59,10 @@ namespace FORWARD
 		const float4* conic_opacity,
 		float* final_T,
 		uint32_t* n_contrib,
-		const bool use_buffers,
 		const uint8_t* rgba_buffer,
 		const float* depth_buffer,
+		const uint8_t* selection_mask,
+		const float selection_alpha_modifier,
 		const float* bg_color,
 		float* out_color);
 }
