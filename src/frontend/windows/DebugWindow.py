@@ -2,13 +2,13 @@ import dearpygui.dearpygui as dpg
 from windows import Window
 
 class DebugWindow(Window):
-    def __init__(self, app_controller):
-        super().__init__("debug_window", app_controller)
+    def __init__(self, app_controller, show=True):
+        super().__init__("debug_window", app_controller, show)
         
         self.app_controller.register_message_listener(self, "debug")
 
         
-        with dpg.window(label="Debug", tag=self.tag, on_close=self.on_close):
+        with dpg.window(label="Debug", tag=self.tag, on_close=self.on_close, show=show):
             self.button = dpg.add_button(label="Enable debug",
                         callback=self.button_pressed)
         self.debug = False

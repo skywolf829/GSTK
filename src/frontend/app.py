@@ -14,6 +14,9 @@ from windows.ModelSettingsWindow import ModelSettingsWindow
 from windows.TrainerWindow import TrainerWindow
 from windows.DebugWindow import DebugWindow
 from windows.RenderSettingsWindow import RenderSettingsWindow
+from windows.EditToolsWindow import EditToolsWindow
+
+from app_utils import load_icons
 
 class AppController:
     def __init__(self):
@@ -30,7 +33,7 @@ class AppController:
         dpg.create_context()
         dpg.configure_app(docking=True, docking_space=True, init_file="window_layout.ini", load_init_file=True)
         dpg.create_viewport(title='GSTK', width=1200, height=800)
-
+        load_icons()        
         self.menubar_setup()
 
         self.main_window = MainWindow(self)
@@ -40,9 +43,11 @@ class AppController:
         self.model_settings_window = ModelSettingsWindow(self)
         self.trainer_window = TrainerWindow(self)
         self.dataset_window = DatasetSetupWindow(self)
-        self.debug_window = DebugWindow(self)
+        self.debug_window = DebugWindow(self, show=False)
         self.renderer_settings_window = RenderSettingsWindow(self)
+        self.edit_tools_window = EditToolsWindow(self)
 
+        self.edit_window_open = None
 
         self.register_message_listener(self, "other")
 
@@ -104,13 +109,19 @@ class AppController:
                     tag="trainer_window_menu_item", 
                     callback=lambda:self.menu_button_click(TrainerWindow, "trainer_window"),
                     check=True)
+                dpg.add_menu_item(label="Edit tools", 
+                    tag="edit_tools_window_menu_item", 
+                    callback=lambda:self.menu_button_click(EditToolsWindow, "edit_tools_window"),
+                    check=True)
                 dpg.add_menu_item(label="Debug window", 
                     tag="debug_window_menu_item", 
                     callback=lambda:self.menu_button_click(DebugWindow, "debug_window"),
                     check=True)
+            
             with dpg.menu(label="Model"):
                 dpg.add_menu_item(label="Save model", callback=self.save_model_window)
                 dpg.add_menu_item(label="Load model", callback=self.load_model_window)
+                dpg.add_menu_item(label="Load default model", callback=lambda:self.app_communicator.send_message({"load_default_model":True}))
 
     # Properly closes down the connection and threaded communicator
     def on_app_close(self):
@@ -137,7 +148,8 @@ class AppController:
             dpg.set_value(f"{tag}_menu_item", enabled)
             #dpg.configure_item(f"{tag}_menu_item", value=enabled)
         else:
-            print(f"{tag}_menu_item does not exist.")
+            #print(f"{tag}_menu_item does not exist.")
+            pass
 
     '''
     Takes new message data (in JSON/dict format) and distributes
@@ -247,6 +259,27 @@ class AppController:
         if('dataset_loaded' in data.keys()):
             self.dataset_window.update_dataset_loaded_val(data['dataset_loaded'])
 
+    def register_edit_window(self, window_tag:str, selection_mask:bool):
+        if self.edit_window_open is None:
+            self.edit_window_open = window_tag
+            ret = True
+        elif window_tag != self.edit_window_open:
+            dpg.delete_item(self.edit_window_open)
+            self.edit_window_open = window_tag
+            ret = True
+        ret = False
+        self.app_communicator.send_message(
+            {"editor_enabled": [self.edit_tools_window is not None, selection_mask]}
+        )
+        return ret
+
+    def unregister_edit_window(self, window_tag:str):
+        if(self.edit_window_open == window_tag):
+            self.edit_window_open = None
+        self.app_communicator.send_message(
+            {"editor_enabled": [self.edit_window_open is not None, False]}
+        )
+
 
 class AppCommunicator(threading.Thread):
     def __init__(self, app_controller : AppController, *args, **kwargs): 
@@ -286,9 +319,12 @@ class AppCommunicator(threading.Thread):
                     if(self.conn.poll()):
                         data = self.conn.recv()
                         self.app_controller.distribute_message_data(data)
+                    time.sleep(1/1000.)
                 except Exception as e:
                     print(e)
                     self.disconnect_from_server()
+            else:
+                time.sleep(0.1)
 
     # Disconnects and updates the app controller
     def disconnect_from_server(self, popup=True):        

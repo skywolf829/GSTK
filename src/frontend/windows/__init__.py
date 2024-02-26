@@ -1,11 +1,11 @@
 import dearpygui.dearpygui as dpg
 
 class Window:
-    def __init__(self, tag, app_controller):
+    def __init__(self, tag, app_controller,show=True):
         self.tag = tag
         self.app_controller = app_controller
 
-        app_controller.update_view_menu(self.tag, True)
+        app_controller.update_view_menu(self.tag, show)
 
     def receive_message(self, data : dict):
         pass

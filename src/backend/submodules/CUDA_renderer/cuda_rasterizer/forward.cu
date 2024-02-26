@@ -385,7 +385,7 @@ renderCUDA(
 			// and its exponential falloff from mean.
 			// Avoid numerical instabilities (see paper appendix). 
 			float alpha = min(0.99f, con_o.w * exp(power));
-			float alpha_mod = use_selection_mask ? collected_selection_mask[j] : 1.0;
+			float alpha_mod = use_selection_mask && !collected_selection_mask[j] ?  selection_alpha_modifier : 1.0f;
 			alpha *= alpha_mod;
 			if (alpha < 1.0f / 255.0f)
 				continue;

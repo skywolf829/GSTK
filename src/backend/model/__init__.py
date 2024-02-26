@@ -98,7 +98,6 @@ class GaussianModel:
         pcd = BasicPointCloud(points=xyz, colors=SH2RGB(shs), normals=np.zeros((num_pts, 3)))
         self.create_from_pcd(pcd)
 
-
     @property
     def get_scaling(self):
         return self.scaling_activation(self._scaling)
@@ -134,7 +133,7 @@ class GaussianModel:
         fused_color = RGB2SH(torch.tensor(np.asarray(pcd.colors)).float().to(self.settings.device))
         features = torch.zeros((fused_color.shape[0], 3, (self.settings.sh_degree + 1) ** 2)).float().to(self.settings.device)
         features[:, :3, 0 ] = fused_color
-        features[:, 3:, 1:] = 0.0
+        features[:, :3, 1:] = 0.0
 
         print("Number of points at initialisation : ", fused_point_cloud.shape[0])
 
@@ -235,7 +234,7 @@ class GaussianModel:
 
         self.active_sh_degree = self.settings.sh_degree
 
-    def render(self, viewpoint_camera, scaling_modifier = 1.0, alpha_modifier = 0.5,
+    def render(self, viewpoint_camera, scaling_modifier = 1.0, alpha_modifier = 0.05,
                rgba_buffer = None, depth_buffer = None, selection_mask = None):
         """
         Render the scene. 

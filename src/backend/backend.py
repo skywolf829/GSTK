@@ -15,6 +15,7 @@ import torch
 import numpy as np
 from dataset.cameras import cam_from_gfx
 from simplejpeg import encode_jpeg
+from utils.sh_utils import RGB2SH
 
 #from torchvision.io import encode_jpeg as encode_jpeg_torch
 #import yappi
@@ -45,6 +46,9 @@ class ServerController:
 
         self.loading = False
         self.renderer_enabled = True
+        self.editor_enabled = False
+        self.editor_selection_mask = False
+        self.edit_list = []
         self.DEBUG = False
         
         self.server_communicator = ServerCommunicator(self, ip, port)
@@ -114,8 +118,54 @@ class ServerController:
 
         if("load_model" in data.keys()):
             self.on_load_model(data['load_model'])
+        
+        if("editor_enabled" in data.keys()):
+            self.editor_enabled = data['editor_enabled'][0]
+            self.editor_selection_mask = data['editor_enabled'][1]
             
+        if("edit" in data.keys()):
+            d = data['edit']
+            if "add" in d['type']:
+                self.process_edit_add(d['payload'])
+
+        if("load_default_model" in data.keys()):
+            self.model.create_from_random_pcd()
+            self.trainer.set_model(self.model)
+
+    def process_edit_add(self, payload):
+        print(payload)
+        num_points = payload[0]
+        dist_type = payload[1]
+        if(dist_type == "uniform"):
+            samples = torch.rand([num_points, 3], device=self.settings.device, dtype=torch.float32)-0.5
+        elif(dist_type == "normal"):
+            samples = torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32).clamp(-1, 1)
+        elif(dist_type == "inverse normal"):
+            samples = torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32).clamp(-1, 1)
+            samples[samples>0] = 1 - samples[samples>0]
+            samples[samples<0] = -1 - samples[samples<0]
+
+        samples = self.primitive_renderer.selector.transform_to_selector_world(samples)
+
+        max_scale = (samples.amax(dim=0)-samples.amin(dim=0)) / (num_points**(1/3.))
+        scales = torch.ones_like(samples) * max_scale
+        scales = self.model.scaling_inverse_activation(scales)
+        rots = torch.zeros([num_points, 4], device=self.settings.device, dtype=torch.float32)
+        rots[:,0] = 1.
+        opacities = self.model.inverse_opacity_activation(0.1 * torch.ones((num_points, 1), dtype=torch.float32, device=self.settings.device))
+        features = np.zeros
+
+        rgb = RGB2SH(0.5 * torch.ones([num_points, 3], dtype=torch.float32, device=self.settings.device))
+        features = torch.zeros((num_points, 3, (self.settings.sh_degree + 1) ** 2)).float().to(self.settings.device)
+        features[:, :3, 0 ] = rgb
+        features[:, :3, 1:] = 0.0
+        self.trainer.densification_postfix(samples, features[:,0:3,0:1].mT, features[:,:,1:].mT, opacities, scales, rots)
+
     def initialize_dataset(self, data):
+        # relative dataset path
+        datasets_path = os.path.join(os.path.abspath(__file__), "..", "..", "..", "data")
+        data['dataset_path'] = os.path.join(datasets_path, data['dataset_path'])
+
         # Just load all key data to settings
         for k in data.keys():
             # Check if the keys line up
@@ -158,9 +208,9 @@ class ServerController:
             self.dataset = Dataset(self.settings, debug=self.DEBUG)
             self.trainer.set_dataset(self.dataset)
             self.trainer.on_settings_update(self.settings)
-            if(self.dataset.scene_info.point_cloud is not None):
-                self.model.create_from_pcd(self.dataset.scene_info.point_cloud)
-                self.trainer.set_model(self.model)
+            #if(self.dataset.scene_info.point_cloud is not None):
+                #self.model.create_from_pcd(self.dataset.scene_info.point_cloud)
+                #self.trainer.set_model(self.model)
         except Exception as e:
             data = {
                 "dataset": {"dataset_error": f"Dataset failed to initialize, likely doesn't recognize dataset type."}
@@ -345,9 +395,15 @@ class ServerController:
     def render(self):
         t0 = time.time()
         
-        rgba_buffer, depth_buffer = self.primitive_renderer.render(self.settings)
-        selection_mask = self.primitive_renderer.get_selection_mask(self.model.get_xyz)
-        
+        if(self.editor_enabled):
+            rgba_buffer, depth_buffer = self.primitive_renderer.render(self.settings)     
+            selection_mask = self.primitive_renderer.get_selection_mask(self.model.get_xyz) if self.editor_selection_mask else None
+
+        else:
+            rgba_buffer = None
+            depth_buffer = None
+            selection_mask = None
+            self.primitive_renderer.controller_tick()
         time_opengl = time.time() - t0
         self.average_opengl_time = self.average_opengl_time*0.8 + time_opengl*0.2
 
@@ -427,6 +483,8 @@ class ServerController:
                 self.trainer.training = False
 
     def on_save_model(self, path):
+        models_path = os.path.join(os.path.abspath(__file__), "..", "..", "..", "savedModels")
+        path = os.path.join(models_path, path)
         if not self.model.initialized:
             data = {"other" : {"error": f"Model not initialized, cannot save."}}
             self.server_communicator.send_message(data)
@@ -434,6 +492,9 @@ class ServerController:
         self.model.save_ply(path)
 
     def on_load_model(self, path):
+        models_path = os.path.join(os.path.abspath(__file__), "..", "..", "..", "savedModels")
+        path = os.path.join(models_path, path)
+        
         if(not os.path.exists(path)):
             data = {"other" : {"error": f"Location doesn't exist: {path}"}}
             self.server_communicator.send_message(data)
@@ -477,6 +538,7 @@ class ServerController:
                       f"train: {self.average_training_time*1000:0.02f}ms, " + \
                       f"Render {self.average_rendering_time*1000:0.02f}ms")
                 t = time.time()
+            time.sleep(1/1000.)
 
             
 class ServerCommunicator():

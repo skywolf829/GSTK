@@ -78,9 +78,6 @@ class WebGPU_renderer():
         self.controller.tick()
         
     def render(self, settings):
-        if(not self.selector.is_active):
-            self.controller_tick()
-            return None, None
         rgba = np.asarray(self.canvas.draw())
 
         
