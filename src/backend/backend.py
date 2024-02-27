@@ -483,6 +483,7 @@ class ServerController:
             path = path + ".ply"
 
         path = os.path.join(models_path, path)
+        path = os.path.abspath(path)
         if not self.model.initialized:
             data = {"other" : {"error": f"Model not initialized, cannot save."}}
             self.server_communicator.send_message(data)

@@ -208,8 +208,9 @@ class AppController:
             viewport_height = dpg.get_viewport_client_height()
 
             with dpg.window(label="Load model", modal=True, no_close=True, tag="popup_window") as modal_id:
-                dpg.add_input_text(label="Load location", 
-                                   tag='load_location')
+                with dpg.group(horizontal=True):
+                    dpg.add_text("Load location:")
+                    dpg.add_input_text(tag='load_location')
                 dpg.add_button(label="Load", width=75, 
                                user_data=(modal_id, True), 
                                callback=load_model)
