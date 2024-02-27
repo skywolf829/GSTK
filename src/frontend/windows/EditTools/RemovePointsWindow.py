@@ -11,7 +11,8 @@ class RemovePointsWindow(Window):
             dpg.delete_item(self.tag)
             return None
 
-        with dpg.window(label="Remove points", tag=self.tag, on_close=self.on_close):
+        with dpg.window(label="Remove points", tag=self.tag, on_close=self.on_close, pos=dpg.get_mouse_pos(),
+                        no_collapse=True):
             dpg.add_input_int(label="Percentage of points", tag="remove_points_percent", 
                               min_value=0, max_value=100, min_clamped=True, max_clamped=True,
                               default_value=100)

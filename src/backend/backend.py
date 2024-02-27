@@ -63,13 +63,7 @@ class ServerController:
         self.main_loop()
        
     def process_message(self,data):
-        #print("Received message")
-        #print(data)
-        #if(self.loading):
-        #    data = {"other" : {"error": "Please wait until the current operation is completed"}}
-        #    self.server_communicator.send_message(data)
-        #    return
-        
+               
         
         if("initialize_dataset" in data.keys() and not self.loading):
             t = threading.Thread(target=self.initialize_dataset, 

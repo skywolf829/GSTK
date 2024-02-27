@@ -11,21 +11,24 @@ class DatasetSetupWindow(Window):
             
             # Dataset entries
             dpg.add_text("Dataset settings")
-            dpg.add_input_text(label="Dataset Path", 
-                               tag="dataset_path", 
-                               default_value="../../data/mic")
+            with dpg.group(horizontal=True):
+                dpg.add_text("Dataset path:")
+                dpg.add_input_text(tag="dataset_path",
+                                   hint="Path relative to /data folder on server")
             #with dpg.group(horizontal=True):
             #    dpg.add_radio_button(["1", "2", "4", "8", "-1"],
             #                default_value="1", 
             #                label="Resolution scale", tag='resolution_scale',
             #                horizontal=True)
             #    dpg.add_text("Resolution scale")
-            dpg.add_input_text(label="Data device", 
-                            hint="Where to host dataset (e.g. cpu, cuda)",
+            with dpg.group(horizontal=True):
+                dpg.add_text("Data device:")
+                dpg.add_input_text(hint="Where to host dataset (e.g. cpu, cuda)",
                             tag="data_device", 
                             default_value="cuda")
-            dpg.add_checkbox(label="White background",
-                            tag="white_background",
+            with dpg.group(horizontal=True):
+                dpg.add_text("White background:")    
+                dpg.add_checkbox(tag="white_background",
                             default_value=False)
             with dpg.group(horizontal=True):
                 dpg.add_button(label="Initialize dataset",

@@ -24,7 +24,8 @@ class EditToolsWindow(Window):
             [ add_points_tool, remove_points_tool ]
         ]
         
-        with dpg.window(label="Edit tools", tag=self.tag, on_close=self.on_close, no_title_bar=True):
+        with dpg.window(label="Edit tools", tag=self.tag, on_close=self.on_close, no_title_bar=True,
+                        min_size=[70, 70]):
             for row in layout:                
                 with dpg.group(horizontal=True):
                     for item in row:                  

@@ -11,107 +11,124 @@ class TrainingSettingsWindow(Window):
         
             # Trainer settings
             dpg.add_text("Training settings")
-            dpg.add_slider_int(label="Total iterations", 
-                               tag="iterations", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Total iterations:")
+                dpg.add_input_int(tag="iterations", 
                                default_value=30000,
                                min_value=100,
                                max_value=100000
                                )
-            dpg.add_slider_float(label="Initial position learning rate", 
-                               tag="position_lr_init", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Initial position learning rate:")
+                dpg.add_input_float(tag="position_lr_init", 
                                default_value=0.00016,
                                min_value=0.0,
                                max_value=0.1,
                                format= '%.6f'
                                )
-            dpg.add_slider_float(label="Final position learning rate", 
-                               tag="position_lr_final", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Final position learning rate:")
+                dpg.add_input_float(tag="position_lr_final", 
                                default_value=0.0000016,
                                min_value=0.0,
                                max_value=0.001,
                                format= '%.8f'
                                )
-            dpg.add_slider_float(label="Position learning rate delay multiplier",
-                               tag="position_lr_delay_mult", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Position learning rate delay multiplier:")
+                dpg.add_input_float(tag="position_lr_delay_mult", 
                                default_value=0.01,
                                min_value=0.0,
                                max_value=0.2,
                                format= '%.6f'
                                )
-            dpg.add_slider_int(label="Position learning rate scheduler max steps", 
-                               tag="position_lr_max_steps", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Position learning rate scheduler max steps:")
+                dpg.add_input_int(tag="position_lr_max_steps", 
                                default_value=30000,
                                min_value=0,
                                max_value=100000
                                )
-            dpg.add_slider_float(label="Feature learning rate", 
-                               tag="feature_lr", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Feature learning rate:")
+                dpg.add_input_float(tag="feature_lr", 
                                default_value=0.0025,
                                min_value=0.0,
                                max_value=0.2,
                                format= '%.6f'
                                )
-            dpg.add_slider_float(label="Opacity learning rate", 
-                               tag="opacity_lr", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Opacity learning rate:")
+                dpg.add_input_float(tag="opacity_lr", 
                                default_value=0.05,
                                min_value=0.0,
                                max_value=1.0,
                                format= '%.6f'
                                )
-            dpg.add_slider_float(label="Scaling learning rate", 
-                               tag="scaling_lr", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Scaling learning rate:")
+                dpg.add_input_float(tag="scaling_lr", 
                                default_value=0.005,
                                min_value=0.0,
                                max_value=0.2,
                                format= '%.6f'
                                )
-            dpg.add_slider_float(label="Rotation learning rate", 
-                               tag="rotation_lr", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Rotation learning rate:")
+                dpg.add_input_float(tag="rotation_lr", 
                                default_value=0.001,
                                min_value=0.0,
                                max_value=0.2,
                                format= '%.6f'
                                )
-            dpg.add_slider_float(label="Percent dense", 
-                               tag="percent_dense", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Percent dense:")
+                dpg.add_input_float(tag="percent_dense", 
                                default_value=0.01,
                                min_value=0.0,
                                max_value=1.0,
                                format= '%.6f'
                                )
-            dpg.add_slider_float(label="SSIM loss weight", 
-                               tag="lambda_dssim", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("SSIM loss weight:")
+                dpg.add_input_float(tag="lambda_dssim", 
                                default_value=0.2,
                                min_value=0.0,
                                max_value=10.0,
                                format= '%.6f'
                                )
-            dpg.add_slider_float(label="Densification interval", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Densification interval:")
+                dpg.add_input_float(
                                tag="densification_interval", 
                                default_value=100,
-                               min_value=-1,
+                               min_value=10,
                                max_value=100000
                                )
-            dpg.add_slider_int(label="Opacity reset interval", 
-                               tag="opacity_reset_interval", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Opacity reset interval:")
+                dpg.add_input_int(tag="opacity_reset_interval", 
                                default_value=3000,
                                min_value=-1,
                                max_value=100000
                                )
-            dpg.add_slider_int(label="Densify from iteration", 
-                               tag="densify_from_iter", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Densify from iteration:")
+                dpg.add_input_int(tag="densify_from_iter", 
                                default_value=500,
                                min_value=0,
                                max_value=100000
                                )
-            dpg.add_slider_int(label="Densify until iteration", 
-                               tag="densify_until_iter", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Densify until iteration:")
+                dpg.add_input_int(tag="densify_until_iter", 
                                default_value=15000,
                                min_value=-1,
                                max_value=100000
                                )
-            dpg.add_slider_float(label="Densify gradient threshold", 
-                               tag="densify_grad_threshold", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Densify gradient threshold:")
+                dpg.add_input_float(tag="densify_grad_threshold", 
                                default_value=0.0002,
                                min_value=0.00001,
                                max_value=0.01,

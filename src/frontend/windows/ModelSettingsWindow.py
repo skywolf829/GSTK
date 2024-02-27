@@ -11,13 +11,15 @@ class ModelSettingsWindow(Window):
             
             # Model entries
             dpg.add_text("Model settings")
-            dpg.add_slider_int(label="SH degree",
-                               tag="sh_degree",
+            with dpg.group(horizontal=True):
+                dpg.add_text("SH degree:") 
+                dpg.add_slider_int(tag="sh_degree",
                                default_value=3,
                                min_value=0,
                                max_value=3)
-            dpg.add_input_text(label="Device", 
-                               hint="Where to host model (e.g. cuda, cuda:3)",
+            with dpg.group(horizontal=True):
+                dpg.add_text("Device:") 
+                dpg.add_input_text(hint="Where to host model (e.g. cuda, cuda:3)",
                                tag="device", 
                                default_value="cuda")
             dpg.add_button(label="Update model settings",

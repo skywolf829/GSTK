@@ -11,7 +11,8 @@ class AddPointsWindow(Window):
             dpg.delete_item(self.tag)
             return None
 
-        with dpg.window(label="Add points", tag=self.tag, on_close=self.on_close):
+        with dpg.window(label="Add points", tag=self.tag, on_close=self.on_close, pos=dpg.get_mouse_pos(),
+                        no_collapse=True):
             dpg.add_input_int(label="Number of points", tag="add_num_points", 
                               min_value=1, max_value=50000, min_clamped=True, max_clamped=True,
                               default_value=10000)

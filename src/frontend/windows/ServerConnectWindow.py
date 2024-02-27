@@ -10,8 +10,12 @@ class ServerConnectWindow(Window):
         with dpg.window(label="Server", 
                         tag=self.tag, on_close=self.on_close,
                         width=450, height=150):
-            dpg.add_input_text(label="Server IP", tag="server_ip", default_value="127.0.0.1")
-            dpg.add_input_text(label="Server port",tag="server_port",  default_value="10789")
+            with dpg.group(horizontal=True):
+                dpg.add_text("Server IP:")  
+                dpg.add_input_text(tag="server_ip", default_value="127.0.0.1")
+            with dpg.group(horizontal=True):
+                dpg.add_text("Server port:")  
+                dpg.add_input_text(tag="server_port",  default_value="10789")
             with dpg.group(horizontal=True):
                 self.button = dpg.add_button(label="Connect", callback=self.connect_button_clicked)
                 self.status = dpg.add_text("", tag="connection_status")

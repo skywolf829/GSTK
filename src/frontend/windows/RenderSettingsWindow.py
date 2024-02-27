@@ -12,36 +12,52 @@ class RenderSettingsWindow(Window):
         
             # Trainer settings
             dpg.add_text("Rendering settings")
-            dpg.add_checkbox(label="Renderer enabled", 
-                               tag='renderer_enabled',
+            with dpg.group(horizontal=True):
+                dpg.add_text("Renderer enabled:")  
+                dpg.add_checkbox(tag='renderer_enabled',
                                default_value=True)
-            dpg.add_slider_float(label="Resolution scaling",
-                                 tag="resolution_scaling",
+            with dpg.group(horizontal=True):
+                dpg.add_text("Resolution scaling:") 
+                dpg.add_slider_float(tag="resolution_scaling",
                                  default_value=1.0,
                                  min_value = 0.1,
                                  max_value = 1.0,
                                  format='%.2f')
-            dpg.add_text("Resolution: ", tag="effective_resolution")
+            with dpg.group(horizontal=True):
+                dpg.add_text("Resolution:") 
+                dpg.add_text(tag="effective_resolution")
             
-            dpg.add_slider_float(label="Field of view", 
-                               tag="fov", 
-                               default_value=70,
-                               min_value=30,
-                               max_value=120,
-                               format= '%.2f'
-                               )
-            dpg.add_slider_float(label="Near plane", 
-                               tag="near_plane", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Field of view:") 
+                dpg.add_input_float(tag="fov", 
+                                default_value=70,
+                                min_value=30,
+                                max_value=120,
+                                step=1,
+                                min_clamped=True,
+                                max_clamped=True,
+                                format= '%.2f'
+                                )
+            with dpg.group(horizontal=True):
+                dpg.add_text("Near plane:") 
+                dpg.add_input_float(tag="near_plane", 
                                default_value=0.01,
                                min_value=0.0001,
-                               max_value=0.1,
+                               step=0.01,
+                               max_value=1.0,
+                               min_clamped=True,
+                               max_clamped=True,
                                format= '%.5f'
                                )
-            dpg.add_slider_float(label="Far plane", 
-                               tag="far_plane", 
+            with dpg.group(horizontal=True):
+                dpg.add_text("Far plane:") 
+                dpg.add_input_float(tag="far_plane", 
                                default_value=100,
                                min_value=1,
                                max_value=10000,
+                               step=10,
+                               min_clamped=True,
+                               max_clamped=True,
                                format= '%.1f'
                                )
             
@@ -57,7 +73,7 @@ class RenderSettingsWindow(Window):
         w = int(scaling*min(max_width,dpg.get_item_width("render_window")))
         h = int(scaling*min(max_height,dpg.get_item_height("render_window")))
 
-        dpg.set_value("effective_resolution", f"Resolution: {w}x{h}")
+        dpg.set_value("effective_resolution", f"{w}x{h}")
 
         render_settings = {
             'renderer_enabled': dpg.get_value('renderer_enabled'),
