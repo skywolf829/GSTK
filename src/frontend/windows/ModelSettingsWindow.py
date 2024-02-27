@@ -2,12 +2,12 @@ import dearpygui.dearpygui as dpg
 from windows import Window
 
 class ModelSettingsWindow(Window):
-    def __init__(self, app_controller):
-        super().__init__("model_settings_window", app_controller)
+    def __init__(self, app_controller, show=True):
+        super().__init__("model_settings_window", app_controller, show=show)
 
         self.app_controller.register_message_listener(self, "model")
         
-        with dpg.window(label="Model settings", tag=self.tag, on_close=self.on_close):
+        with dpg.window(label="Model settings", tag=self.tag, on_close=self.on_close, show=show):
             
             # Model entries
             dpg.add_text("Model settings")

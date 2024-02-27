@@ -478,25 +478,37 @@ class ServerController:
 
     def on_save_model(self, path):
         models_path = os.path.join(os.path.abspath(__file__), "..", "..", "..", "savedModels")
+        
+        if(".ply" not in path[-4:]):
+            path = path + ".ply"
+
         path = os.path.join(models_path, path)
         if not self.model.initialized:
             data = {"other" : {"error": f"Model not initialized, cannot save."}}
             self.server_communicator.send_message(data)
             return
         self.model.save_ply(path)
+        data = {"other" : {"popup": f"Model saved to \n {path}."}}
+        self.server_communicator.send_message(data)
 
     def on_load_model(self, path):
         models_path = os.path.join(os.path.abspath(__file__), "..", "..", "..", "savedModels")
         path = os.path.join(models_path, path)
         
         if(not os.path.exists(path)):
-            data = {"other" : {"error": f"Location doesn't exist: {path}"}}
-            self.server_communicator.send_message(data)
-            return
+            path2 = path + ".ply"
+            if not os.path.exists(path2):
+                data = {"other" : {"error": f"Location doesn't exist: {path}"}}
+                self.server_communicator.send_message(data)
+                return
+            else:
+                path = path2
         
         try:
             self.model.load_ply(path)
             self.trainer.set_model(self.model)
+            data = {"other" : {"popup": f"Model loaded."}}
+            self.server_communicator.send_message(data)
         except Exception as e:
             data = {"other" : {"error": f"Error loading the model."}}
             self.server_communicator.send_message(data)

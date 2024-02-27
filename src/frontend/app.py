@@ -39,8 +39,8 @@ class AppController:
         self.main_window = MainWindow(self)
         self.server_connect_window = ServerConnectWindow(self)
         self.render_window = RenderWindow(self)
-        self.training_settings_window = TrainingSettingsWindow(self)
-        self.model_settings_window = ModelSettingsWindow(self)
+        self.training_settings_window = TrainingSettingsWindow(self, show=False)
+        self.model_settings_window = ModelSettingsWindow(self, show=False)
         self.trainer_window = TrainerWindow(self)
         self.dataset_window = DatasetSetupWindow(self)
         self.debug_window = DebugWindow(self, show=False)
@@ -99,7 +99,7 @@ class AppController:
                     check=True)
                 dpg.add_menu_item(label="Training settings", 
                     tag="trainer_settings_window_menu_item", 
-                    callback=lambda:self.menu_button_click(TrainingSettingsWindow, "training_settings_window"),
+                    callback=lambda:self.menu_button_click(TrainingSettingsWindow, "trainer_settings_window"),
                     check=True)
                 dpg.add_menu_item(label="Model settings", 
                     tag="model_settings_window_menu_item", 
@@ -134,7 +134,7 @@ class AppController:
             pass
     
     def menu_button_click(self, window, tag):
-        if(dpg.does_item_exist(tag)):
+        if(dpg.does_item_exist(tag) or dpg.does_alias_exist(tag)):
             dpg.configure_item(tag, show=not dpg.is_item_shown(tag))
         else:
             window(self)
@@ -250,6 +250,8 @@ class AppController:
         # Handles all "other" messages, usually global or state-related
         if("error" in data.keys()):
             self.popup_box("Error", data['error'])
+        if("popup" in data.keys()):
+            self.popup_box("Notification", data['popup'])
         if("settings_state" in data.keys()):
             for k in data['settings_state'].keys():
                 if(dpg.does_item_exist(k)):
