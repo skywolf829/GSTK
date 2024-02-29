@@ -162,4 +162,5 @@ cython_debug/
 
 src/backend/submodules/CUDA_renderer/build
 src/backend/submodules/CUDA_knn/build
+data/
 *.ply

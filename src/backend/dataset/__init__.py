@@ -33,9 +33,10 @@ class Dataset:
             return
         
         if os.path.exists(os.path.join(settings.dataset_path, "sparse")):
+            print("Found sparse folder, assuming COLMAP dataset.")
             scene_info = sceneLoadTypeCallbacks["Colmap"](settings.dataset_path, "images", False)
         elif os.path.exists(os.path.join(settings.dataset_path, "transforms_train.json")):
-            print("Found transforms_train.json file, assuming Blender data set!")
+            print("Found transforms_train.json file, assuming Blender dataset.")
             scene_info = sceneLoadTypeCallbacks["Blender"](settings.dataset_path, settings.white_background, False)
         else:
             print("Could not recognize scene type!")

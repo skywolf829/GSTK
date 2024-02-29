@@ -6,6 +6,7 @@ class DatasetSetupWindow(Window):
         super().__init__("dataset_setup_window", app_controller)
 
         self.app_controller.register_message_listener(self, "dataset")
+        self.app_controller.register_message_listener(self, "connection")
         
         with dpg.window(label="Dataset Setup", tag=self.tag, on_close=self.on_close):
             
@@ -15,6 +16,7 @@ class DatasetSetupWindow(Window):
                 dpg.add_text("Dataset path:")
                 dpg.add_input_text(tag="dataset_path",
                                    hint="Path relative to /data folder on server")
+            
             #with dpg.group(horizontal=True):
             #    dpg.add_radio_button(["1", "2", "4", "8", "-1"],
             #                default_value="1", 
@@ -30,6 +32,19 @@ class DatasetSetupWindow(Window):
                 dpg.add_text("White background:")    
                 dpg.add_checkbox(tag="white_background",
                             default_value=False)
+            
+            dpg.add_spacer()
+            dpg.add_text("Paths if you need to process your dataset first:")
+            with dpg.group(horizontal=True):
+                dpg.add_text("COLMAP executable:")
+                dpg.add_input_text(tag="colmap_path",
+                                   hint="Path to colmap executable (if not in environment path already)")
+            with dpg.group(horizontal=True):
+                dpg.add_text("ImageMagick executable:")
+                dpg.add_input_text(tag="imagemagick_path",
+                                   hint="Path to ImageMagick executable (if not in environment path already)")
+            dpg.add_spacer()
+
             with dpg.group(horizontal=True):
                 dpg.add_button(label="Initialize dataset",
                             callback=self.initialize_dataset_pressed)
@@ -43,7 +58,10 @@ class DatasetSetupWindow(Window):
             "dataset_path" : dpg.get_value("dataset_path"),
             #"resolution_scale" : int(dpg.get_value("resolution_scale")),
             "white_background" : dpg.get_value("white_background"),
-            "data_device": dpg.get_value("data_device")
+            "data_device": dpg.get_value("data_device"),
+            "colmap_path": dpg.get_value("colmap_path"),
+            "imagemagick_path": dpg.get_value("imagemagick_path")
+
         }
         data_to_send = {
             "initialize_dataset" : dataset_data
@@ -52,13 +70,29 @@ class DatasetSetupWindow(Window):
 
     def on_dataset_initialized(self, data):
         dpg.set_value(self.dataset_status, "Dataset loaded.")
-        self.app_controller.popup_box("Dataset was initialized", data)
+        dpg.delete_item("dataset_loading_wait")
+        #self.app_controller.popup_box("Dataset was initialized", data)
  
     def on_dataset_loading(self, data):
-        dpg.set_value(self.dataset_status, "Dataset loading...")
+        dpg.set_value(self.dataset_status, data)        
+        if(dpg.does_item_exist("dataset_loading_wait")):
+            dpg.set_value("dataset_loading_text", data)
+        else:
+            with dpg.window(label="Loading dataset...", modal=True, no_close=True, tag="dataset_loading_wait"):
+                dpg.add_text(data, tag="dataset_loading_text")
+                with dpg.group(horizontal=True):
+                    dpg.add_spacer(width=80)
+                    dpg.add_loading_indicator()
+        dpg.split_frame()
+        viewport_width = dpg.get_viewport_client_width()
+        viewport_height = dpg.get_viewport_client_height()
+        width = dpg.get_item_width('dataset_loading_wait')
+        height = dpg.get_item_height('dataset_loading_wait')
+        dpg.set_item_pos('dataset_loading_wait', [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
 
     def on_dataset_error(self, data):
         dpg.set_value(self.dataset_status, "")
+        dpg.delete_item("dataset_loading_wait")
         self.app_controller.popup_box("Dataset initialization error", data)
 
     def update_dataset_loaded_val(self, val):
@@ -74,3 +108,7 @@ class DatasetSetupWindow(Window):
             self.on_dataset_loading(data['dataset_loading'])
         if "dataset_error" in data.keys():
             self.on_dataset_error(data['dataset_error'])
+        if("disconnected" in data.keys()):
+            dpg.delete_item("dataset_loading_wait")
+
+        

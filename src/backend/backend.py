@@ -16,6 +16,7 @@ import numpy as np
 from dataset.cameras import cam_from_gfx
 from simplejpeg import encode_jpeg
 from utils.sh_utils import RGB2SH
+import subprocess
 
 #from torchvision.io import encode_jpeg as encode_jpeg_torch
 #import yappi
@@ -157,29 +158,20 @@ class ServerController:
 
     def initialize_dataset(self, data):
         # relative dataset path
-        datasets_path = os.path.join(os.path.abspath(__file__), "..", "..", "..", "data")
+        datasets_path = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", "..", "data"))
         data['dataset_path'] = os.path.join(datasets_path, data['dataset_path'])
 
         # Just load all key data to settings
         for k in data.keys():
             # Check if the keys line up
-            if k not in self.settings.keys():
-                data = {
-                    "dataset": {"dataset_error": f"Key {k} from client not present in Settings"}
-                }
-                self.server_communicator.send_message(data)
-                self.loading = False
-                return
-            else:
+            if k in self.settings.keys():
                 self.settings.params[k] = data[k]
-        
 
         # Check to make sure dataset path exists
         if not os.path.exists(data["dataset_path"]) and not self.DEBUG:
-            data = {
+            self.server_communicator.send_message({
                 "dataset": {"dataset_error": f"Dataset path does not exist: {data['dataset_path']}"}
-            }
-            self.server_communicator.send_message(data)
+            })
             self.loading = False
             return
         
@@ -188,17 +180,15 @@ class ServerController:
             a = torch.empty([32], dtype=torch.float32, device=data['data_device'])
             del a
         except Exception as e:
-            data = {
+            self.server_communicator.send_message({
                 "dataset": {"dataset_error": f"Dataset device does not exist: {data['data_device']}"}
-            }
-            self.server_communicator.send_message(data)
+            })
             self.loading = False
             return
         
         # Create dataset
         try:
-            data = {"dataset": {"dataset_loading": f""}}
-            self.server_communicator.send_message(data)
+            self.server_communicator.send_message({"dataset": {"dataset_loading": f"Attempting to load dataset..."}})
             self.dataset = Dataset(self.settings, debug=self.DEBUG)
             self.trainer.set_dataset(self.dataset)
             self.trainer.on_settings_update(self.settings)
@@ -206,17 +196,48 @@ class ServerController:
                 #self.model.create_from_pcd(self.dataset.scene_info.point_cloud)
                 #self.trainer.set_model(self.model)
         except Exception as e:
-            data = {
-                "dataset": {"dataset_error": f"Dataset failed to initialize, likely doesn't recognize dataset type."}
-            }
-            self.server_communicator.send_message(data)
-            self.loading = False
-            return
-        
-        data = {
+            # Doesn't recognize dataset, use COLMAP to turn it into a dataset from images
+            self.server_communicator.send_message({"dataset": {"dataset_loading": f"Attempting to create dataset from COLMAP..."}})
+
+            # move images in directory to an <input> folder
+            if not os.path.exists(os.path.join(data['dataset_path'], "input")):
+                mkdir_p(os.path.join(data['dataset_path'], "input"))
+            for item in os.listdir(data['dataset_path']):
+                if '.png' in item.lower() or ".jpg" in item.lower() or ".jpeg" in item.lower():
+                    os.rename(os.path.join(data['dataset_path'], item), 
+                              os.path.join(data['dataset_path'], "input", item))
+            
+            cmd = ["python", "convert.py", "-s", data['dataset_path']]
+            if data['colmap_path'] != "":
+                cmd.append("--colmap_executable")
+                cmd.append(os.path.abspath(data['colmap_path']))
+            if data['imagemagick_path'] != "":    
+                cmd.append("--imagemagick_path")
+                cmd.append(os.path.abspath(data['imagemagick_path']))      
+
+            try:
+                s = subprocess.Popen(cmd)
+                s.wait()
+                try:
+                    self.server_communicator.send_message({"dataset": {"dataset_loading": f"COLMAP complete. Loading dataset..."}})
+                    self.dataset = Dataset(self.settings, debug=self.DEBUG)
+                    self.trainer.set_dataset(self.dataset)
+                    self.trainer.on_settings_update(self.settings)
+                except Exception as e:
+                    # Doesn't recognize dataset still
+                    self.server_communicator.send_message({"dataset": {"dataset_error": f"Error loading dataset."}})
+                    return
+            except Exception as e:
+                self.server_communicator.send_message({
+                    "dataset": {"dataset_error": f"Error running colmap on new dataset."}
+                })
+            
+
+            
+
+        self.server_communicator.send_message({
             "dataset": {"dataset_initialized": f"Dataset was initialized."}
-        }
-        self.server_communicator.send_message(data)
+        })
         self.loading = False
         
     def update_trainer_settings(self, data):
