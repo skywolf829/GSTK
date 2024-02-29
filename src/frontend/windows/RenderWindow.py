@@ -189,8 +189,7 @@ class RenderWindow(Window):
     def on_key_release(self, user_data, key_code_data):
         if(not dpg.is_item_focused(self.tag)):
             return
-        key_code = key_code_data[0]
-        t = key_code_data[1]
+        key_code = key_code_data
 
         self.app_controller.app_communicator.send_message(
             {"keyboard":

@@ -122,13 +122,15 @@ class ServerController:
             d = data['edit']
             if "add" in d['type']:
                 self.process_edit_add(d['payload'])
+            
+            if "remove" in d['type']:
+                self.process_edit_remove(d['payload'])
 
         if("load_default_model" in data.keys()):
             self.model.create_from_random_pcd()
             self.trainer.set_model(self.model)
 
     def process_edit_add(self, payload):
-        print(payload)
         num_points = payload[0]
         dist_type = payload[1]
         if(dist_type == "uniform"):
@@ -155,6 +157,19 @@ class ServerController:
         features[:, :3, 0 ] = rgb
         features[:, :3, 1:] = 0.0
         self.trainer.densification_postfix(samples, features[:,0:3,0:1].mT, features[:,:,1:].mT, opacities, scales, rots)
+
+    def process_edit_remove(self, payload):
+        remove_pct = payload[0]
+        decimate_type = payload[1]
+        redistribute = payload[2]
+
+        mask = self.primitive_renderer.get_selection_mask(self.model.get_xyz).type(torch.bool)
+        print(self.model.get_num_gaussians)
+        print(mask.sum())        
+        self.trainer.prune_points(mask)
+        print(self.model.get_num_gaussians)
+        
+
 
     def initialize_dataset(self, data):
         # relative dataset path
