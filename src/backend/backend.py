@@ -164,13 +164,8 @@ class ServerController:
         redistribute = payload[2]
 
         mask = self.primitive_renderer.get_selection_mask(self.model.get_xyz).type(torch.bool)
-        print(self.model.get_num_gaussians)
-        print(mask.sum())        
         self.trainer.prune_points(mask)
-        print(self.model.get_num_gaussians)
         
-
-
     def initialize_dataset(self, data):
         # relative dataset path
         datasets_path = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", "..", "data"))
@@ -582,8 +577,7 @@ class ServerController:
                       f"Render {self.average_rendering_time*1000:0.02f}ms")
                 t = time.time()
             time.sleep(1/1000.)
-
-            
+          
 class ServerCommunicator():
 
     def __init__(self, server_controller : ServerController, ip : str, port: int, *args, **kwargs): 
@@ -659,11 +653,6 @@ if __name__ == "__main__":
     parser.add_argument('--ip', type=str, default="127.0.0.1")
     parser.add_argument('--port', type=int, default=10789)
     args = parser.parse_args()
-    #yappi.start()
 
     s = ServerController(args.ip, args.port)
 
-    # infinite loop until ctrl-c
-    #while True:
-    #    time.sleep(1.0)
-    
