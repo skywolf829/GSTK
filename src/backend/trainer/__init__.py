@@ -170,7 +170,6 @@ class Trainer:
     def prune_points(self, mask):
         valid_points_mask = ~mask
         optimizable_tensors = self._prune_optimizer(valid_points_mask)
-        print(f"Replacing {self.model._xyz.shape} with {optimizable_tensors['xyz'].shape}")
         self.model._xyz = optimizable_tensors["xyz"]
         self.model._features_dc = optimizable_tensors["f_dc"]
         self.model._features_rest = optimizable_tensors["f_rest"]

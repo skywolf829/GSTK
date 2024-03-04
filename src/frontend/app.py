@@ -322,7 +322,7 @@ class AppCommunicator(threading.Thread):
                     if(self.conn.poll()):
                         data = self.conn.recv()
                         self.app_controller.distribute_message_data(data)
-                    time.sleep(1/1000.)
+                    time.sleep(1/10000.)
                 except Exception as e:
                     print(e)
                     self.disconnect_from_server()

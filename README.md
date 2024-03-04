@@ -2,6 +2,8 @@
 This is Gaussian Splatting Toolkit - one application for creating a dataset, training a model, editing the gaussians, and fine tuning.
 We also (plan to) support novel research implementations for gaussian splatting, such as compression-aware training ([Niedermayr et al. 2024](https://arxiv.org/abs/2401.02436)) and DreamGaussian ([Tang et al. 2024](https://dreamgaussian.github.io/)), so you at home can use a simple application to try new techniques.
 
+![Teaser](figures/Teaser.jpg)
+
 ## Why GSTK?
 Many [great 3DGS tools exist](https://github.com/MrNeRF/awesome-3D-gaussian-splatting) for editing a trained [3DGS model](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/) for use in other rendering software such as Blender, Unity, Unreal, or on the web.
 However, some of these edits can reduce the final quality.

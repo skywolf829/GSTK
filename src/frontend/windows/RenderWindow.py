@@ -88,13 +88,6 @@ class RenderWindow(Window):
         dpg.configure_item("render_view_image",
             uv_max = (y_dim/self.max_tex_width, x_dim/self.max_tex_height))
         
-        self.frames_this_update += 1
-        t = time.time() - self.last_fps_update
-        if (t > 1.0):
-            fps = self.frames_this_update / t
-            dpg.set_value(self.fps, f"FPS: {fps:0.02f}")
-            self.frames_this_update = 0
-            self.last_fps_update = time.time()
 
     def on_resize(self):
         #print("resize window")
@@ -214,4 +207,5 @@ class RenderWindow(Window):
     def receive_message(self, data: dict):
         if("image" in data.keys()):
             img = data['image']
+            dpg.set_value(self.fps, f"FPS: {1./(data['update_time']+1e-8):0.02f}")
             self.on_new_image(img)

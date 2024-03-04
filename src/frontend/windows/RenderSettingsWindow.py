@@ -61,6 +61,22 @@ class RenderSettingsWindow(Window):
                                format= '%.1f'
                                )
             
+            with dpg.group(horizontal=True):
+                dpg.add_text("Gaussian size proportion:") 
+                dpg.add_slider_float(tag="gaussian_size", 
+                               default_value=1.0,
+                               min_value=0.01,
+                               max_value=1.0,
+                               format= '%.2f'
+                               )
+            with dpg.group(horizontal=True):
+                dpg.add_text("Selected transparency:") 
+                dpg.add_slider_float(tag="selection_transparency", 
+                               default_value=0.05,
+                               min_value=0.01,
+                               max_value=1.0,
+                               format= '%.2f'
+                               )
             dpg.add_button(label="Update renderer settings",
                         callback=self.update_renderer_settings)    
       
@@ -81,7 +97,9 @@ class RenderSettingsWindow(Window):
             "height" : h,
             "fov" : fov,
             "near_plane" : dpg.get_value("near_plane"),
-            "far_plane" : dpg.get_value("far_plane")
+            "far_plane" : dpg.get_value("far_plane"),
+            "selection_transparency": dpg.get_value("selection_transparency"),
+            "gaussian_size": dpg.get_value("gaussian_size")
         }
         if(self.app_controller.app_communicator.connected):
             data_to_send = {

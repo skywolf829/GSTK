@@ -47,8 +47,11 @@ class ServerController:
 
         self.loading = False
         self.renderer_enabled = True
+        self.gaussian_size = 1.0
+        self.selection_transparency = 0.05
         self.editor_enabled = False
         self.editor_selection_mask = False
+        self.invert_selection_mask = False
         self.edit_list = []
         self.DEBUG = False
         
@@ -130,21 +133,24 @@ class ServerController:
             self.model.create_from_random_pcd()
             self.trainer.set_model(self.model)
 
+        if("invert_selection_mask" in data.keys()):
+            self.invert_selection_mask = data['invert_selection_mask']
+
     def process_edit_add(self, payload):
         num_points = payload[0]
         dist_type = payload[1]
         if(dist_type == "uniform"):
             samples = torch.rand([num_points, 3], device=self.settings.device, dtype=torch.float32)-0.5
         elif(dist_type == "normal"):
-            samples = torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32).clamp(-1, 1)
-        elif(dist_type == "inverse normal"):
-            samples = torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32).clamp(-1, 1)
+            samples = (torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32)/3).clamp(-0.5, 0.5)
+        elif(dist_type == "inverse_normal"):
+            samples = (torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32)/3).clamp(-0.5, 0.5)
             samples[samples>0] = 1 - samples[samples>0]
             samples[samples<0] = -1 - samples[samples<0]
 
         samples = self.primitive_renderer.selector.transform_to_selector_world(samples)
 
-        max_scale = (samples.amax(dim=0)-samples.amin(dim=0)) / (num_points**(1/3.))
+        max_scale = (samples.amax(dim=0)-samples.amin(dim=0)) / 50
         scales = torch.ones_like(samples) * max_scale
         scales = self.model.scaling_inverse_activation(scales)
         rots = torch.zeros([num_points, 4], device=self.settings.device, dtype=torch.float32)
@@ -160,10 +166,12 @@ class ServerController:
 
     def process_edit_remove(self, payload):
         remove_pct = payload[0]
-        decimate_type = payload[1]
-        redistribute = payload[2]
+        redistribute = payload[1]
+        invert_selection = payload[2]
 
         mask = self.primitive_renderer.get_selection_mask(self.model.get_xyz).type(torch.bool)
+        if(invert_selection):
+            mask = ~mask
         self.trainer.prune_points(mask)
         
     def initialize_dataset(self, data):
@@ -323,6 +331,8 @@ class ServerController:
         self.primitive_renderer.resize(data['width'], data['height'])
         self.primitive_renderer.camera.fov = data['fov']
         self.primitive_renderer.camera.depth_range = [data['near_plane'],data['far_plane']]
+        self.gaussian_size = data['gaussian_size']
+        self.selection_transparency = data['selection_transparency']
 
     def on_train_start(self):
         
@@ -435,6 +445,7 @@ class ServerController:
 
         render_package = self.model.render(
             cam_from_gfx(self.primitive_renderer.camera, self.primitive_renderer.canvas),
+            scaling_modifier=self.gaussian_size, alpha_modifier=self.selection_transparency,
             rgba_buffer=rgba_buffer, depth_buffer = depth_buffer, selection_mask=selection_mask)
         img = torch.clamp(render_package['render'], min=0, max=1.0) * 255
         return img
@@ -450,7 +461,7 @@ class ServerController:
         self.server_communicator.send_message(
             { "render": {
                 "image" : img_jpeg,
-                "update_time": self.average_step_time
+                "update_time": self.average_rendering_time
                 }
             }
         )
@@ -488,7 +499,6 @@ class ServerController:
             img_jpg = self.encode_img(img)
             self.send_render_image(img_jpg)
             
-        
         render_time = time.time() - t0
         self.average_rendering_time = self.average_rendering_time*0.8 + render_time*0.2
 
@@ -576,7 +586,7 @@ class ServerController:
                       f"train: {self.average_training_time*1000:0.02f}ms, " + \
                       f"Render {self.average_rendering_time*1000:0.02f}ms")
                 t = time.time()
-            time.sleep(1/1000.)
+            time.sleep(1/10000.)
           
 class ServerCommunicator():
 
