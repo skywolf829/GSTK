@@ -67,8 +67,7 @@ class ServerController:
         self.main_loop()
        
     def process_message(self,data):
-               
-        
+           
         if("initialize_dataset" in data.keys() and not self.loading):
             t = threading.Thread(target=self.initialize_dataset, 
                                  args=[data['initialize_dataset']],
@@ -76,6 +75,10 @@ class ServerController:
                                  name="InitializeDatasetThread")
             self.loading = True
             t.start()
+        if("load_point_cloud" in data.keys() and not self.loading):            
+            if(self.dataset.scene_info.point_cloud is not None):
+                self.model.create_from_pcd(self.dataset.scene_info.point_cloud)
+                self.trainer.set_model(self.model)
             
         if("update_trainer_settings" in data.keys() and not self.loading):
             t = threading.Thread(target=self.update_trainer_settings, 
@@ -142,11 +145,11 @@ class ServerController:
         if(dist_type == "uniform"):
             samples = torch.rand([num_points, 3], device=self.settings.device, dtype=torch.float32)-0.5
         elif(dist_type == "normal"):
-            samples = (torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32)/3).clamp(-0.5, 0.5)
+            samples = (torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32)/5).clamp(-0.5, 0.5)
         elif(dist_type == "inverse_normal"):
-            samples = (torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32)/3).clamp(-0.5, 0.5)
-            samples[samples>0] = 1 - samples[samples>0]
-            samples[samples<0] = -1 - samples[samples<0]
+            samples = (torch.randn([num_points, 3], device=self.settings.device, dtype=torch.float32)/5).clamp(-0.5, 0.5)
+            samples[samples>0] = 0.5 - samples[samples>0]
+            samples[samples<0] = -0.5 - samples[samples<0]
 
         samples = self.primitive_renderer.selector.transform_to_selector_world(samples)
 
@@ -210,9 +213,6 @@ class ServerController:
             self.dataset = Dataset(self.settings, debug=self.DEBUG)
             self.trainer.set_dataset(self.dataset)
             self.trainer.on_settings_update(self.settings)
-            #if(self.dataset.scene_info.point_cloud is not None):
-                #self.model.create_from_pcd(self.dataset.scene_info.point_cloud)
-                #self.trainer.set_model(self.model)
         except Exception as e:
             # Doesn't recognize dataset, use COLMAP to turn it into a dataset from images
             self.server_communicator.send_message({"dataset": {"dataset_loading": f"Attempting to create dataset from COLMAP..."}})
@@ -475,7 +475,7 @@ class ServerController:
                         "max_iteration": self.settings.iterations,
                         "loss": last_loss,
                         "ema_loss": ema_last_loss,
-                        "update_time": self.average_step_time
+                        "update_time": self.average_training_time
                     }
                 }
             }

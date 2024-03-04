@@ -48,12 +48,14 @@ class DatasetSetupWindow(Window):
             with dpg.group(horizontal=True):
                 dpg.add_button(label="Initialize dataset",
                             callback=self.initialize_dataset_pressed)
-                self.dataset_status = dpg.add_text("", tag="dataset_status")
+                #self.dataset_status = dpg.add_text("", tag="dataset_status")                
+                self.point_cloud_button = dpg.add_button(label="Load point cloud",
+                        callback=self.point_cloud_button_pressed)
             dpg.add_spacer()
 
 
     def initialize_dataset_pressed(self):
-        dpg.set_value(self.dataset_status, "")
+        #dpg.set_value(self.dataset_status, "")
         dataset_data = {
             "dataset_path" : dpg.get_value("dataset_path"),
             #"resolution_scale" : int(dpg.get_value("resolution_scale")),
@@ -68,13 +70,18 @@ class DatasetSetupWindow(Window):
         }
         self.app_controller.app_communicator.send_message(data_to_send)
 
+    def point_cloud_button_pressed(self):
+        self.app_controller.app_communicator.send_message({
+            "load_point_cloud": True
+        })
+
     def on_dataset_initialized(self, data):
-        dpg.set_value(self.dataset_status, "Dataset loaded.")
+        #dpg.set_value(self.dataset_status, "Dataset loaded.")
         dpg.delete_item("dataset_loading_wait")
         #self.app_controller.popup_box("Dataset was initialized", data)
  
     def on_dataset_loading(self, data):
-        dpg.set_value(self.dataset_status, data)        
+        #dpg.set_value(self.dataset_status, data)        
         if(dpg.does_item_exist("dataset_loading_wait")):
             dpg.set_value("dataset_loading_text", data)
         else:
@@ -91,15 +98,16 @@ class DatasetSetupWindow(Window):
         dpg.set_item_pos('dataset_loading_wait', [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
 
     def on_dataset_error(self, data):
-        dpg.set_value(self.dataset_status, "")
+        #dpg.set_value(self.dataset_status, "")
         dpg.delete_item("dataset_loading_wait")
         self.app_controller.popup_box("Dataset initialization error", data)
 
     def update_dataset_loaded_val(self, val):
-        if(val):
-            dpg.set_value(self.dataset_status, "Dataset loaded.")
-        else:
-            dpg.set_value(self.dataset_status, "")
+        #if(val):
+        #    dpg.set_value(self.dataset_status, "Dataset loaded.")
+        #else:
+        #    dpg.set_value(self.dataset_status, "")
+        pass
 
     def receive_message(self, data):
         if "dataset_initialized" in data.keys():

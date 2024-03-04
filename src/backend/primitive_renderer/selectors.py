@@ -45,7 +45,6 @@ class Selector():
         return points_t[:,0:3]
 
     def transform_to_selector_world(self, points : torch.Tensor) -> torch.Tensor:
-        print(self.mesh.world.matrix)
         # Get the inverse transform matrix for the mesh
         t = torch.tensor(self.mesh.world.matrix, dtype=torch.float32, device=points.device).T
         # Create homogenous coords for the points

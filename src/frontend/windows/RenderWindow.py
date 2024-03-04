@@ -207,5 +207,5 @@ class RenderWindow(Window):
     def receive_message(self, data: dict):
         if("image" in data.keys()):
             img = data['image']
-            dpg.set_value(self.fps, f"FPS: {1./(data['update_time']+1e-8):0.02f}")
+            dpg.set_value(self.fps, f"Render time: {data['update_time']*1000:0.02f}ms")
             self.on_new_image(img)
