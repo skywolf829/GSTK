@@ -14,6 +14,7 @@ import sys
 from datetime import datetime
 import numpy as np
 import random
+import pqkmeans
 
 def inverse_sigmoid(x):
     return torch.log(x/(1-x))
@@ -130,3 +131,24 @@ def safe_state(silent):
     random.seed(0)
     np.random.seed(0)
     torch.manual_seed(0)
+
+def kmeans(data, k):
+
+    # Train a PQ encoder.
+    # Each vector is divided into 4 parts and each part is
+    # encoded with log256 = 8 bit, resulting in a 32 bit PQ code.
+    encoder = pqkmeans.encoder.PQEncoder(num_subdim=1, Ks=256)
+    encoder.fit(data)  # Use a subset of X for training
+
+    # Convert input vectors to PQ codes, where each PQ code consists of uint8(s).
+    # You can train the encoder and transform the input vectors to PQ codes preliminary.
+    X_pqcode = encoder.transform(data)
+
+    # Run clustering
+    kmeans = pqkmeans.clustering.PQKMeans(encoder=encoder, k=k)
+    clustered = kmeans.fit_predict(X_pqcode)
+    return clustered, kmeans.cluster_centers_
+
+if __name__ == "__main__":
+    x = np.random.random([10000000, 3]).astype(np.float32)
+    labels, cluster_centers = kmeans(x, 1000000)

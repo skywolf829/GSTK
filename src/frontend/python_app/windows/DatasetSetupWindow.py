@@ -80,23 +80,6 @@ class DatasetSetupWindow(Window):
         dpg.delete_item("dataset_loading_wait")
         #self.app_controller.popup_box("Dataset was initialized", data)
  
-    def on_dataset_loading(self, data):
-        #dpg.set_value(self.dataset_status, data)        
-        if(dpg.does_item_exist("dataset_loading_wait")):
-            dpg.set_value("dataset_loading_text", data)
-        else:
-            with dpg.window(label="Loading dataset...", modal=True, no_close=True, tag="dataset_loading_wait"):
-                dpg.add_text(data, tag="dataset_loading_text")
-                with dpg.group(horizontal=True):
-                    dpg.add_spacer(width=80)
-                    dpg.add_loading_indicator()
-        dpg.split_frame()
-        viewport_width = dpg.get_viewport_client_width()
-        viewport_height = dpg.get_viewport_client_height()
-        width = dpg.get_item_width('dataset_loading_wait')
-        height = dpg.get_item_height('dataset_loading_wait')
-        dpg.set_item_pos('dataset_loading_wait', [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
-
     def on_dataset_error(self, data):
         #dpg.set_value(self.dataset_status, "")
         dpg.delete_item("dataset_loading_wait")
@@ -112,8 +95,6 @@ class DatasetSetupWindow(Window):
     def receive_message(self, data):
         if "dataset_initialized" in data.keys():
             self.on_dataset_initialized(data['dataset_initialized'])
-        if "dataset_loading" in data.keys():
-            self.on_dataset_loading(data['dataset_loading'])
         if "dataset_error" in data.keys():
             self.on_dataset_error(data['dataset_error'])
         if("disconnected" in data.keys()):

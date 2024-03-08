@@ -50,6 +50,7 @@ class AppController:
         self.edit_window_open = None
 
         self.register_message_listener(self, "other")
+        self.register_message_listener(self, "loading")
 
         #dpg.set_viewport_vsync(True)
         dpg.setup_dearpygui()
@@ -223,6 +224,28 @@ class AppController:
         height = dpg.get_item_height(modal_id)
         dpg.set_item_pos(modal_id, [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
 
+    def on_loading_message(self, data):
+        if(data['loaded']):
+            dpg.delete_item("loading_window")
+            return
+        header = data['header']
+        
+        if(dpg.does_item_exist("loading_window")):
+            dpg.set_value("loading_text", data)
+            dpg.set_value("loading_window", data)
+        else:
+            with dpg.window(label="Loading dataset...", modal=True, no_close=True, tag="dataset_loading_wait"):
+                dpg.add_text(data, tag="dataset_loading_text")
+                with dpg.group(horizontal=True):
+                    dpg.add_spacer(width=80)
+                    dpg.add_loading_indicator()
+        dpg.split_frame()
+        viewport_width = dpg.get_viewport_client_width()
+        viewport_height = dpg.get_viewport_client_height()
+        width = dpg.get_item_width('dataset_loading_wait')
+        height = dpg.get_item_height('dataset_loading_wait')
+        dpg.set_item_pos('dataset_loading_wait', [viewport_width // 2 - width // 2, viewport_height // 2 - height // 2])
+
     def popup_box(self, title, message):
         # https://github.com/hoffstadt/DearPyGui/discussions/1002
         # guarantee these commands happen in the same frame
@@ -261,6 +284,8 @@ class AppController:
             self.debug_window.update_debug_val(data['debug'])
         if('dataset_loaded' in data.keys()):
             self.dataset_window.update_dataset_loaded_val(data['dataset_loaded'])
+        if('loading' in data.keys()):
+            self.on_loading_message(data['loading'])
 
     def register_edit_window(self, window_tag:str, selection_mask:bool):
         if self.edit_window_open is None:

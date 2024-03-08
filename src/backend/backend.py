@@ -17,6 +17,8 @@ from dataset.cameras import cam_from_gfx
 from simplejpeg import encode_jpeg
 from utils.sh_utils import RGB2SH
 import subprocess
+from utils.model_utils import decimate_model
+
 
 #from torchvision.io import encode_jpeg as encode_jpeg_torch
 #import yappi
@@ -171,12 +173,30 @@ class ServerController:
         remove_pct = payload[0]
         redistribute = payload[1]
         invert_selection = payload[2]
-
+        self.server_communicator.send_message({"loading": 
+                                               {
+                                                   "loaded": False,
+                                                    "header": "Computing...",
+                                                    "message": "Computing point reduction..."
+                                                }
+                                               }
+                                            )
         mask = self.primitive_renderer.get_selection_mask(self.model.get_xyz).type(torch.bool)
-        if(invert_selection):
-            mask = ~mask
-        self.trainer.prune_points(mask)
-        
+        if(remove_pct == 100):            
+            if(invert_selection):
+                mask = ~mask
+            self.trainer.prune_points(mask)
+        else:
+            new_xyz, new_scales, new_rots, new_feats, new_opacities = decimate_model(self.model, remove_pct, mask)
+            self.trainer.prune_points(mask)
+            self.trainer.densification_postfix(new_xyz, new_feats[:,0:1,:], new_feats[:,1:,:], new_opacities, new_scales, new_rots)
+        self.server_communicator.send_message({"loading": 
+                                               {
+                                                   "loaded": True
+                                                }
+                                               }
+                                            )
+    
     def initialize_dataset(self, data):
         # relative dataset path
         datasets_path = os.path.abspath(os.path.join(os.path.abspath(__file__), "..", "..", "..", "data"))
@@ -209,13 +229,23 @@ class ServerController:
         
         # Create dataset
         try:
-            self.server_communicator.send_message({"dataset": {"dataset_loading": f"Attempting to load dataset..."}})
+            self.server_communicator.send_message({"loading": 
+                                               {    "loaded": False,
+                                                    "header": "Dataset loading...",
+                                                    "message": "Loading dataset from storage..."}
+                                               }
+                                            )
             self.dataset = Dataset(self.settings, debug=self.DEBUG)
             self.trainer.set_dataset(self.dataset)
             self.trainer.on_settings_update(self.settings)
         except Exception as e:
             # Doesn't recognize dataset, use COLMAP to turn it into a dataset from images
-            self.server_communicator.send_message({"dataset": {"dataset_loading": f"Attempting to create dataset from COLMAP..."}})
+            self.server_communicator.send_message({"loading": 
+                                               {    "loaded": False,
+                                                    "header": "Dataset loading...",
+                                                    "message": "Attempting to create dataset from COLMAP..."}
+                                               }
+                                            )
 
             # move images in directory to an <input> folder
             if not os.path.exists(os.path.join(data['dataset_path'], "input")):
@@ -237,7 +267,12 @@ class ServerController:
                 s = subprocess.Popen(cmd)
                 s.wait()
                 try:
-                    self.server_communicator.send_message({"dataset": {"dataset_loading": f"COLMAP complete. Loading dataset..."}})
+                    self.server_communicator.send_message({"loading": 
+                                               {    "loaded": False,
+                                                    "header": "Dataset loading...",
+                                                    "message": "COLMAP complete, loading dataset..."}
+                                               }
+                                            )
                     self.dataset = Dataset(self.settings, debug=self.DEBUG)
                     self.trainer.set_dataset(self.dataset)
                     self.trainer.on_settings_update(self.settings)
@@ -250,7 +285,9 @@ class ServerController:
                     "dataset": {"dataset_error": f"Error running colmap on new dataset."}
                 })
             
-
+        self.server_communicator.send_message({"loading": 
+                                               {"loaded": True}}
+                                            )
             
 
         self.server_communicator.send_message({
