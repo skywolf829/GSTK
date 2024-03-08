@@ -1,24 +1,36 @@
-import logo from './logo.svg';
+import React, { useState } from 'react';
+import { WebSocketProvider } from './components/WebSocketContext';
+
 import './App.css';
+import ToolBar from './components/Toolbar'; // Adjust the path as necessary
+import TrainerSettings from './components/TrainerSettings';
+import SettingsMenu from './components/Settings';
+import ExampleWindow from './components/ExampleWindow';
+import CanvasComponent from './components/CanvasComponent';
+import ServerConnection from './components/ServerConnection';
 
 function App() {
+  
+  const [highestZIndex, setHighestZIndex] = useState(100);
+
+  const bringToFront = () => {
+    setHighestZIndex(highestZIndex + 1);
+    return highestZIndex + 1;
+  };
+
+  
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <WebSocketProvider>
+      <div className="App">
+        <SettingsMenu bringToFront={bringToFront}/>
+        <ExampleWindow bringToFront={bringToFront}/>
+        <ToolBar bringToFront={bringToFront}/>
+        <TrainerSettings bringToFront={bringToFront}/>
+        <ServerConnection bringToFront={bringToFront}/>
+        <CanvasComponent />
+      </div>
+    </WebSocketProvider>
   );
 }
 
