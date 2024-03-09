@@ -1,12 +1,12 @@
 
 
-// MyComponent.js
-import React, {useState, useEffect} from 'react';
-import Draggable from 'react-draggable';
-import { Resizable } from 'react-resizable';
+import React, {useState} from 'react';
+import { useWebSocket, useWebSocketListener} from '../utils/WebSocketContext';
+import useWindowSettings from '../utils/useWindowSettings';
 import 'react-resizable/css/styles.css';
+import DraggableResizableWindow from './DraggableResizableWindow';
 
-const TrainerSettings = ({ bringToFront }) => {
+const TrainerSettings = ({ bringToFront, onClose }) => {
     const variable_names = [
         "Total iterations",
         "Initial position learning rate",
@@ -61,40 +61,12 @@ const TrainerSettings = ({ bringToFront }) => {
         1500,
         0.0002,
     ];
-    // Visible state
-    const [isVisible, setIsVisible] = useState(true);
-    
-    // Size state
-    const [size, setSize] = useState({ width: 400, height: 500 });
-    const minConstraints = [380, 150];
-    const [position, setPosition] = useState({ x: 0, y: 0 });
+
+    const title = "Trainer Settings";
+    const minConstraints = [370, 490];
 
     // Input values states
     const [floatValues, setFloatValues] = useState(variable_defaults); // Start with two float inputs
-    const [textValue, setTextValue] = useState('');
-    const [isChecked, setIsChecked] = useState(false);
-
-    // z-index
-    const [zIndex, setZIndex] = useState(100);
-    
-
-    useEffect(() => {
-        // Load the size and position from localStorage when the component mounts
-        const savedSize = JSON.parse(localStorage.getItem('trainerWindowSize'));
-        const savedPosition = JSON.parse(localStorage.getItem('trainerWindowPosition'));
-    
-        if (savedSize) {
-          setSize(savedSize);
-        }
-        if (savedPosition) {
-          setPosition(savedPosition);
-        }
-    }, []);
-
-    const handleFocus = () => {
-        const newZIndex = bringToFront();
-        setZIndex(newZIndex);
-    };
 
     const handleChange = (index, value) => {
         const newFloatValues = [...floatValues];
@@ -102,111 +74,119 @@ const TrainerSettings = ({ bringToFront }) => {
         setFloatValues(newFloatValues);
     };
 
-    const handleDragStop = (e, data) => {
-        // Save the new position to localStorage
-        const newPosition = { x: data.x, y: data.y };
-        localStorage.setItem('trainerWindowPosition', JSON.stringify(newPosition));
-        setPosition(newPosition);
-    };
+    const {
+        isVisible, isMinimized, 
+        size, position, zIndex,
+        toggleVisibility, toggleMinimized,
+        handleDragStop, handleFocus,
+        handleResize, handleResizeStop,
+      } = useWindowSettings(title, minConstraints, bringToFront);
 
-    const handleResizeStop = (event, { size }) => {
-        // Save the new size to localStorage
-        localStorage.setItem('trainerWindowSize', JSON.stringify(size));
-        setSize(size);
-    };
 
-    const onResize = (event, { element, size }) => {
-        setSize({ width: size.width, height: size.height });
-    };
+    // Websocket setup (from global context)
+    const { subscribe, send } = useWebSocket();
     
-    const toggleVisibility = () => {
-        setIsVisible(!isVisible);
+      // Logic to handle the message
+    const handleMessage = (message) => {
+        console.log(message);
+        const newValues = [
+            message.data.total_iterations,
+            message.data.position_lr_init,
+            message.data.position_lr_final,
+            message.data.position_lr_delay_mult,
+            message.data.position_lr_max_steps,
+            message.data.feature_lr,
+            message.data.opacity_lr,
+            message.data.scaling_lr,
+            message.data.rotation_lr,
+            message.data.percent_dense,
+            message.data.lambda_dssim,
+            message.data.densification_interval,
+            message.data.opacity_reset_interval,
+            message.data.densify_from_iter,
+            message.data.densify_until_iter,
+            message.data.densify_grad_threshold
+
+        ]
+        setFloatValues(newValues);
     };
-     
+
+    // Use the custom hook to listen for messages of type 'test'
+    useWebSocketListener(subscribe, 'trainingSettings', handleMessage);
+
+    const handleClick = () => {
+        console.log("Update trainer settings.");
+        const data = {
+            total_iterations: floatValues[0],
+            position_lr_init: floatValues[1],
+            position_lr_final: floatValues[2],
+            position_lr_delay_mult: floatValues[3],
+            position_lr_max_steps: floatValues[4],
+            feature_lr: floatValues[5],
+            opacity_lr: floatValues[6],
+            scaling_lr: floatValues[7],
+            rotation_lr: floatValues[8],
+            percent_dense: floatValues[9],
+            lambda_dssim: floatValues[10],
+            densification_interval: floatValues[11],
+            opacity_reset_interval: floatValues[12],
+            densify_from_iter: floatValues[13],
+            densify_until_iter: floatValues[14],
+            densify_grad_threshold: floatValues[15]
+        }
+        const message = {
+            type: "trainingSettings",
+            data: data
+        }
+        send(message);
+    };
+
     return (
-        isVisible && (
-            <Draggable handle=".drag-handle" 
-            position={position}
-            onStop={handleDragStop}
-            onStart={handleFocus}>
-                <Resizable width={size.width} 
-                height={size.height} 
-                onResize={onResize}
-                onResizeStop={handleResizeStop}
-                minConstraints={minConstraints}>
-                    <div style={{ width: size.width, height: size.height, padding: 10, 
-                        backgroundColor: '#f0f0f0', position: 'absolute', 
-                        borderRadius: '8px', boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)' ,
-                        display: 'flex', flexDirection: 'column', overflow: 'hidden', 
-                        zIndex: zIndex}}>
-                        
-                        <div style={{ width: '100%', display: 'flex'}}>
-                            <span className="drag-handle">Trainer settings</span>
-                            <button onClick={toggleVisibility} style={{
-                                border: 'none',
-                                background: 'none',
-                                cursor: 'pointer',
-                                width: '35px',
-                                height: 'auto',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                borderRadius: '12px',
-                                backgroundColor: '#ccc',
-                                //boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                            }}>
-                                <span style={{ color: 'white', fontWeight: 'bold' }}>×</span>
-                            </button>
-                        </div>
-                        <br></br>
-                        {floatValues.map((floatValue, index) => (
-                            <div key={index} style={{ 
-                                display: 'flex', 
-                                alignItems: 'center',
-                                marginBottom: '5px', 
-                                width: '100%' 
-                                }}>
-                            <label style={{
-                                marginRight: '10px', 
-                                flexShrink: 0 // Prevent the label from shrinking
-                                }}>{variable_names[index]}: </label>
-                            <input
-                                type="number"
-                                step={variable_steps[index]}
-                                value={floatValue}
-                                style={{ 
-                                    //flexGrow: 1, // Input field takes up remaining space
-                                    marginLeft: 'auto', // Push input to the right
-                                    width: "100%"
-                                }}                                
-                                onChange={(e) => handleChange(index, parseFloat(e.target.value))}
-                            />
-                            </div>
-                        ))}
-                        <div style={{ display: 'flex', alignItems: 'left', marginBottom: '5px', width: '85%' }}>
-                            <label style={{ marginRight: '10px' }}>Text:</label>
-                            <input 
-                                type="text" 
-                                value={textValue} 
-                                onChange={e => setTextValue(e.target.value)}
-                                style={{width:'100%'}}
-                            />
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '5px', width: '85%' }}>
-                            <label style={{ marginRight: '10px' }}>Checkbox:</label>
-                            <input 
-                                type="checkbox" 
-                                checked={isChecked} 
-                                onChange={e => setIsChecked(e.target.checked)}
-                                style={{width:'100%'}}
-                            />
-                        </div>
-                    </div>
-                </Resizable>
-            </Draggable>
-        )
-    );
-    
+        <DraggableResizableWindow
+          isVisible={isVisible}
+          isMinimized={isMinimized}
+          position={position}
+          size={size}
+          zIndex={zIndex}
+          title={title}
+          onDragStop={handleDragStop}
+          onFocus={handleFocus}
+          onResize={handleResize}
+          onResizeStop={handleResizeStop}
+          onClose={onClose}
+          toggleVisibility={toggleVisibility}
+          toggleMinimized={toggleMinimized}
+          minConstraints={minConstraints}
+        >
+            <div style={{padding:"5px"}}>
+            {floatValues.map((floatValue, index) => (
+                <div key={index} style={{ 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    marginBottom: '5px', 
+                    width: '100%' 
+                    }}>
+                    <label style={{
+                        marginRight: '10px', 
+                        flexShrink: 0 // Prevent the label from shrinking
+                        }}>{variable_names[index]}: </label>
+                    <input
+                        type="number"
+                        step={variable_steps[index]}
+                        value={floatValue}
+                        style={{ 
+                            //flexGrow: 1, // Input field takes up remaining space
+                            marginLeft: 'auto', // Push input to the right
+                            width: "100%"
+                        }}                                
+                        onChange={(e) => handleChange(index, parseFloat(e.target.value))}
+                    />
+                </div>
+            ))}
+            <button onClick={handleClick}>Update</button>
+            </div>
+        </DraggableResizableWindow>
+      );    
 };
 
 export default TrainerSettings;

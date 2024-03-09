@@ -1,0 +1,16 @@
+.info-container {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px; /* Adjust as needed */
+  }
+  
+  .item-label {
+    text-align: left;
+    margin-right: 10px; /* Adjust as needed for spacing */
+  }
+  
+  .item-value {
+    text-align: right;
+    align-items: right;
+    flex-grow: 1;
+  }

@@ -1,0 +1,108 @@
+/* ExampleWindow.module.css */
+.window {
+    padding: 5px;
+    background-color: #f0f0f0;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: absolute;
+    z-index: 100;
+  }
+  
+  .windowHeader {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 5px 10px;
+    background-color: #e0e0e0;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    cursor: grab;
+  }
+  .windowHeader span { /* Assuming the title of your window is a <span> element */
+    margin-left: 10px; /* Give some space from the left edge of the window */
+    margin-right: 45px; /* Give enough space for the close button */
+  }
+  
+  .drag-handle {
+    background-color: #ccc; /* Light gray */
+    padding:5px;
+    text-align: top;
+    cursor: move;
+    width:100%;
+    /*box-shadow: -1px 0 5px rgba(0, 0, 0, 0.2);*/
+    border-radius: 5px;
+    height:auto;
+    flex-grow: 1; /* Allows the title to take up the extra space */
+    text-align: center; /* Centers the text within the title span itself */
+    font-weight: bold; /* Optional: makes the title text bold */
+    display: flex;
+    justify-content: center; /* Aligns children (title and button) on the main-axis */
+    align-items: center; /* Aligns children (title and button) on the cross-axis */
+  }
+  
+  .minimizeButton {
+    position: absolute;
+    top: 0;
+    right: 35px;
+    width: 35px; /* Or as per the height of your header */
+    height: 100%; /* Makes the button take the full height of the header */
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    transition: background-color 0.2s;
+  }
+  
+  .minimizeButton:hover,
+  .minimizeButton:focus {
+    background-color: #d9ab4f;
+    color: white;
+  }
+  
+  .minimizeButton:active {
+    background-color: #c9bc2c;
+  }
+
+  .closeButton {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 35px; /* Or as per the height of your header */
+    height: 100%; /* Makes the button take the full height of the header */
+    border: none;
+    background-color: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    border-top-right-radius: 8px;
+    transition: background-color 0.2s;
+  }
+  
+  .closeButton:hover,
+  .closeButton:focus {
+    background-color: #d9534f;
+    color: white;
+  }
+  
+  .closeButton:active {
+    background-color: #c9302c;
+  }
+  
+  .react-resizable-handle {
+    display: block;
+    background-color: transparent;
+    border: none;
+  }
+  
+  .react-resizable-handle::after {
+    content: "";
+  }

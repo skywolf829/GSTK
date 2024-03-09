@@ -1,0 +1,58 @@
+/* IconBar.module.css */
+.iconBar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 10px;
+  background-color: #eee; /* Light gray */
+  border-radius: 8px;
+}
+
+.icon {
+  margin: 0 4px;
+  cursor: pointer;
+  opacity: 0.6; /* Non-active icons are less visible */
+  padding: 10px; /* Or any other value that suits your design */
+  border-radius: 8px; /* Gives a circular highlight */
+  transition: background-color 0.3s; /* Smooth transition for background color change */
+}
+
+.icon.active {
+  background-color: #d8d8d8; /* Highlight color for active icons */
+}
+
+/* Additional class for server connection status */
+.serverConnected {
+  color: green; /* For connected state */
+}
+
+.serverDisconnected {
+  color: red; /* For disconnected state */
+}
+
+.tooltip {
+  visibility: hidden;
+  width: 120px;
+  background-color: #555;
+  color: #fff;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px 0;
+  position: absolute;
+  z-index: 1001;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.icon:hover .tooltip {
+  visibility: visible;
+  opacity: 1;
+}

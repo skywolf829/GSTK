@@ -1,17 +1,22 @@
-import React, { useState } from 'react';
-import { WebSocketProvider } from './components/WebSocketContext';
+import React, { useState, useEffect} from 'react';
+import { WebSocketProvider } from './utils/WebSocketContext';
 
-import './App.css';
-import ToolBar from './components/Toolbar'; // Adjust the path as necessary
-import TrainerSettings from './components/TrainerSettings';
-import SettingsMenu from './components/Settings';
-import ExampleWindow from './components/ExampleWindow';
+import './css/App.css';
 import CanvasComponent from './components/CanvasComponent';
-import ServerConnection from './components/ServerConnection';
+import WindowController from './components/windowController';
 
 function App() {
   
-  const [highestZIndex, setHighestZIndex] = useState(100);
+  
+  const [highestZIndex, setHighestZIndex] = useState(() => {
+    const savedZIndex = JSON.parse(localStorage.getItem('highestZIndex'));
+    return savedZIndex || 100; // Use saved value, or default to 100 if not found
+  });
+
+  useEffect(() => {
+    localStorage.setItem('highestZIndex', JSON.stringify(highestZIndex));
+  }, [highestZIndex]);
+
 
   const bringToFront = () => {
     setHighestZIndex(highestZIndex + 1);
@@ -23,11 +28,7 @@ function App() {
   return (
     <WebSocketProvider>
       <div className="App">
-        <SettingsMenu bringToFront={bringToFront}/>
-        <ExampleWindow bringToFront={bringToFront}/>
-        <ToolBar bringToFront={bringToFront}/>
-        <TrainerSettings bringToFront={bringToFront}/>
-        <ServerConnection bringToFront={bringToFront}/>
+        <WindowController bringToFront={bringToFront}/>
         <CanvasComponent />
       </div>
     </WebSocketProvider>
