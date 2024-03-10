@@ -33,14 +33,12 @@ const RenderSettings = ({ bringToFront, onClose }) => {
     
       // Logic to handle the message
     const updateRenderSettings = (message) => {
-        console.log(message);
         setResolutionScaling(message.data.resolutionScaling);
         setFov(message.data.fov);
         setGaussianSize(message.data.gaussianSize);
         setSelectionTransparency(message.data.selectionTransparency);
     };
     const updateRendererToggled = (message) => {
-        console.log(message);
         setRendererEnabled(message.data.rendererEnabled);
     };
 
@@ -49,28 +47,27 @@ const RenderSettings = ({ bringToFront, onClose }) => {
     useWebSocketListener(subscribe, 'renderEnabled', updateRendererToggled);
 
     const handleClick = () => {
-        console.log("Update render settings.");
         const message = {
-            type: "renderSettings",
+            type: "updateRendererSettings",
             data: {
-                resolutionScaling: resolutionScaling,
+                resolution_scaling: resolutionScaling,
                 fov: fov,
-                gaussianSize: gaussianSize,
-                selectionTransparency: selectionTransparency
+                gaussian_size: gaussianSize,
+                selection_transparency: selectionTransparency
             }
         };
         send(message);
     };
 
 
-    const handleRenderToggle = () => {
-        console.log("Toggle rendering");
+    const handleRenderToggle = (enabled) => {
         const message = {
-            type: "rendererEnabled",
+            type: "updateRendererEnabled",
             data: {
-                enabled: rendererEnabled
+                enabled: enabled
             }
         };
+        console.log(message);
         send(message);
     };
     
@@ -103,7 +100,7 @@ const RenderSettings = ({ bringToFront, onClose }) => {
                                 checked={rendererEnabled}
                                 onChange={(e) => {
                                     setRendererEnabled(e.target.checked);
-                                    handleRenderToggle(); 
+                                    handleRenderToggle(e.target.checked); 
                                 }}
                             />
                         </div>

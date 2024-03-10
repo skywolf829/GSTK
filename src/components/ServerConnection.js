@@ -13,7 +13,7 @@ const ServerConnection = ({ bringToFront, onClose }) => {
     const minConstraints = [220, 115];
 
     const [serverIp, setServerIp] = useState("localhost");
-    const [serverPort, setServerPort] = useState("6789");
+    const [serverPort, setServerPort] = useState("10789");
 
     const {
         isVisible, isMinimized, 

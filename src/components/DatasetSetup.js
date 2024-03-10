@@ -47,7 +47,6 @@ const DatasetSetup = ({ bringToFront, onClose }) => {
     
     // Logic to handle the message
     const handleDatasetSettingsMessage = (message) => {
-        console.log(message);
         setValues([message.dataset_path, 
             message.dataset_device, 
             message.colmap_path, 
@@ -55,7 +54,7 @@ const DatasetSetup = ({ bringToFront, onClose }) => {
     };
 
     const handleDatasetLoaded = (message) => {
-        console.log(message);
+
         setDatasetLoaded(message.data.loaded);
     }
     // Use the custom hook to listen for messages of type 'test'
@@ -63,7 +62,7 @@ const DatasetSetup = ({ bringToFront, onClose }) => {
     useWebSocketListener(subscribe, 'datasetLoaded', handleDatasetLoaded);
 
     const handleInitializeClick = () => {
-        console.log("Update dataset settings.");
+        
         const message = {
             type: 'datasetInitialize', // Define the message type or structure as needed
             data: {
@@ -115,13 +114,13 @@ const DatasetSetup = ({ bringToFront, onClose }) => {
                         }}>{variable_names[index]}: </label>
                     <input
                         type="text"
-                        value={value}
+                        value={values[index]}
                         style={{ 
                             //flexGrow: 1, // Input field takes up remaining space
                             marginLeft: 'auto', // Push input to the right
                             width: "100%"
                         }}                                
-                        onChange={(e) => handleChange(index, parseFloat(e.target.value))}
+                        onChange={(e) => handleChange(index, e.target.value)}
                     />
                 </div>
             ))}

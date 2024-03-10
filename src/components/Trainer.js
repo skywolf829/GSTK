@@ -40,8 +40,7 @@ const Trainer = ({ bringToFront, onClose }) => {
 
       // Logic to handle the message
     const handleMessage = (message) => {
-        console.log(message);
-        updateTrainingInfo(message.training, 
+        updateTrainingInfo(message.data.training, 
             [message.data.iteration, message.data.totalIterations], 
             message.data.loss, message.data.stepTime);
     };
@@ -50,9 +49,8 @@ const Trainer = ({ bringToFront, onClose }) => {
     useWebSocketListener(subscribe, 'trainingState', handleMessage);
 
     const handleTrainClick = () => {
-        console.log("Training clicked.");
         const message = {
-            type: 'training',
+            type: 'toggleTraining',
             data: {
               "toggleTrain": true
             }
@@ -88,7 +86,7 @@ const Trainer = ({ bringToFront, onClose }) => {
                 </div>
                 <div className="info-container">
                     <div className="item-label">Time per training step:</div>
-                    <div className="item-value">{trainStepTime.toFixed(2)}s</div>
+                    <div className="item-value">{trainStepTime.toFixed(2)}ms</div>
                 </div>
                 <button onClick={handleTrainClick}>
                     {training ? "Pause training":"Start training"}

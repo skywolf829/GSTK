@@ -88,7 +88,6 @@ const TrainerSettings = ({ bringToFront, onClose }) => {
     
       // Logic to handle the message
     const handleMessage = (message) => {
-        console.log(message);
         const newValues = [
             message.data.total_iterations,
             message.data.position_lr_init,
@@ -115,7 +114,6 @@ const TrainerSettings = ({ bringToFront, onClose }) => {
     useWebSocketListener(subscribe, 'trainingSettings', handleMessage);
 
     const handleClick = () => {
-        console.log("Update trainer settings.");
         const data = {
             total_iterations: floatValues[0],
             position_lr_init: floatValues[1],
@@ -135,7 +133,7 @@ const TrainerSettings = ({ bringToFront, onClose }) => {
             densify_grad_threshold: floatValues[15]
         }
         const message = {
-            type: "trainingSettings",
+            type: "updateTrainingSettings",
             data: data
         }
         send(message);

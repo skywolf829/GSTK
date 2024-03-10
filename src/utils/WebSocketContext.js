@@ -80,10 +80,18 @@ export const WebSocketProvider = ({ children }) => {
 
   // Function to send messages to the server
   const send = (message) => {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
-    } else {
-      //console.error('WebSocket is not connected.');
+    if(ws){
+      if (ws.readyState === WebSocket.OPEN) {
+        const m = JSON.stringify(message);
+        //console.log("Sending: " + m)
+        ws.send(m);
+      } 
+      else{
+        //console.log('WebSocket not ready: ' + ws.readyState);
+      }
+    }
+    else {
+      //console.error('WebSocket not initialized.');
     }
   };
 
