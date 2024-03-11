@@ -21,7 +21,7 @@ const DatasetSetup = ({ bringToFront, onClose }) => {
     ];
 
     const title = "Dataset Setup";
-    const minConstraints = [270, 165];
+    const minConstraints = [270, 170];
 
     // Input values states
     const [values, setValues] = useState(variable_defaults); 

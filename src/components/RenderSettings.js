@@ -10,7 +10,7 @@ import "../css/Trainer.css"
 const RenderSettings = ({ bringToFront, onClose }) => {
     
     const title = "Render settings";
-    const minConstraints = [340, 192];
+    const minConstraints = [350, 210];
 
     // Input values states
     const [rendererEnabled, setRendererEnabled] = useState(true); 
@@ -67,7 +67,6 @@ const RenderSettings = ({ bringToFront, onClose }) => {
                 enabled: enabled
             }
         };
-        console.log(message);
         send(message);
     };
     

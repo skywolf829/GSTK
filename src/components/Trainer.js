@@ -10,7 +10,7 @@ import "../css/Trainer.css"
 const Trainer = ({ bringToFront, onClose }) => {
 
     const title = "Training";
-    const minConstraints = [220, 135];
+    const minConstraints = [240, 135];
 
     // Input values states
     const [training, setTraining] = useState(false);
