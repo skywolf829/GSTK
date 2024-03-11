@@ -19,45 +19,57 @@ import { faPaintBrush, faCog, faPlug ,
 
 export const windowsConfig = [
     {
-      key: 'serverConnection',
-      component: ServerConnection,
       title: 'Server Connection',
+      key: 'serverConnection',
+      tooltip: 'Connect to server',
+      component: ServerConnection,
       icon: faPlug,
-      tooltip: 'Connect to server'
+      minWidth: 220,
+      minHeight: 125
     },
     {
-      key: 'trainer',
-      component: Trainer,
       title: 'Trainer',
+      key: 'trainer',
+      tooltip: 'Training window',
+      component: Trainer,
       icon: faPlayCircle,
-      tooltip: 'Training window'
+      minWidth: 240,
+      minHeight: 150
     },    
     {
-      key: 'datasetSetup',
-      component: DatasetSetup,
       title: 'Dataset setup',
+      key: 'datasetSetup',
+      tooltip: 'Dataset loading',
+      component: DatasetSetup,
       icon: faDatabase,
-      tooltip: 'Dataset loading'
+      minWidth: 270,
+      minHeight: 170
     },   
     {
-      key: 'trainerSettings',
-      component: TrainerSettings,
       title: 'Trainer Settings',
+      key: 'trainerSettings',
+      tooltip: 'Trainer settings',
+      component: TrainerSettings,
       icon: faSlidersH,
-      tooltip: 'Trainer settings'
+      minWidth: 370,
+      minHeight: 490
     },     
     {
-      key: 'rendererSettings',
-      component: RenderSettings,
       title: 'Render Settings',
+      key: 'rendererSettings',
+      tooltip: 'Render settings',
+      component: RenderSettings,
       icon: faDesktop,
-      tooltip: 'Render settings'
+      minWidth: 350,
+      minHeight: 210
     }, 
     {
       key: 'toolbar',
       component: Toolbar,
       title: 'Toolbar',
       icon: faHammer,
-      tooltip: 'Edit tools'
+      tooltip: 'Edit tools',
+      minWidth: 240,
+      minHeight: 135
     }
   ];

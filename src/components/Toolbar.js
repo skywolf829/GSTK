@@ -6,12 +6,12 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPaintBrush, faEraser, faFont} from '@fortawesome/free-solid-svg-icons';
 import Draggable from 'react-draggable';
 
-const ToolBar = ({ bringToFront }) => {
+const ToolBar = ({ windowKey, windowState, 
+  toggleVisibility, toggleMinimized,
+  handleDragStop, handleFocus,
+  handleResize, handleResizeStop })  => {
     // State data
     const [selectedTool, setSelectedTool] = useState('');
-
-    // Position
-    const [position, setPosition] = useState({ x: 100, y: 100 });
 
     // The tools
     const tools = [
@@ -20,29 +20,6 @@ const ToolBar = ({ bringToFront }) => {
         { id: 'text', icon: faFont, name: 'Text' },
     ];
 
-    // z-index
-    const [zIndex, setZIndex] = useState(100);
-
-    useEffect(() => {
-      // Load the size and position from localStorage when the component mounts
-      const savedPosition = JSON.parse(localStorage.getItem('toolsPosition'));
-  
-      if (savedPosition) {
-        setPosition(savedPosition);
-      }
-    }, []);
-
-    const handleFocus = () => {
-      const newZIndex = bringToFront();
-      setZIndex(newZIndex);
-    };
-
-    const handleDragStop = (e, data) => {
-      // Save the new position to localStorage
-      const newPosition = { x: data.x, y: data.y };
-      localStorage.setItem('toolsPosition', JSON.stringify(newPosition));
-      setPosition(newPosition);
-    };
 
     const handleToolClick = (toolId) => {
         setSelectedTool(toolId);
@@ -50,10 +27,10 @@ const ToolBar = ({ bringToFront }) => {
     };
     return (
         <Draggable
-          position={position}
-          onStop={handleDragStop}
-          onStart={handleFocus}>
-        <div className="toolbar" style={{zIndex: zIndex}}>
+          position={windowState.position}
+          onStop={(e, data) => handleDragStop(windowKey, data)}
+          onStart={() => handleFocus(windowKey)}>
+        <div className="toolbar" style={{zIndex: windowState.zIndex}}>
           {tools.map((tool) => (
             <div key={tool.id} className={`tool-icon ${selectedTool === tool.id ? 'selected' : ''}`} onClick={() => handleToolClick(tool.id)}>
               <FontAwesomeIcon icon={tool.icon} title={tool.name} />

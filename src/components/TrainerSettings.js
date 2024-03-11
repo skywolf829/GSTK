@@ -6,7 +6,10 @@ import useWindowSettings from '../utils/useWindowSettings';
 import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
 
-const TrainerSettings = ({ bringToFront, onClose }) => {
+const TrainerSettings = ({ windowKey, windowState, 
+    toggleVisibility, toggleMinimized,
+    handleDragStop, handleFocus,
+    handleResize, handleResizeStop }) => {
     const variable_names = [
         "Total iterations",
         "Initial position learning rate",
@@ -62,9 +65,6 @@ const TrainerSettings = ({ bringToFront, onClose }) => {
         0.0002,
     ];
 
-    const title = "Trainer Settings";
-    const minConstraints = [370, 490];
-
     // Input values states
     const [floatValues, setFloatValues] = useState(variable_defaults); // Start with two float inputs
 
@@ -73,15 +73,6 @@ const TrainerSettings = ({ bringToFront, onClose }) => {
         newFloatValues[index] = value;
         setFloatValues(newFloatValues);
     };
-
-    const {
-        isVisible, isMinimized, 
-        size, position, zIndex,
-        toggleMinimized,
-        handleDragStop, handleFocus,
-        handleResize, handleResizeStop,
-      } = useWindowSettings(title, minConstraints, bringToFront);
-
 
     // Websocket setup (from global context)
     const { subscribe, send } = useWebSocket();
@@ -141,19 +132,19 @@ const TrainerSettings = ({ bringToFront, onClose }) => {
 
     return (
         <DraggableResizableWindow
-          isVisible={isVisible}
-          isMinimized={isMinimized}
-          position={position}
-          size={size}
-          zIndex={zIndex}
-          title={title}
-          onDragStop={handleDragStop}
-          onFocus={handleFocus}
-          onResize={handleResize}
-          onResizeStop={handleResizeStop}
-          onClose={onClose}
+          windowKey={windowKey}
+          isMinimized={windowState.isMinimized}
+          position={windowState.position}
+          size={windowState.size}
+          zIndex={windowState.zIndex}
+          title={windowState.title}
+          handleDragStop={handleDragStop}
+          handleFocus={handleFocus}
+          handleResize={handleResize}
+          handleResizeStop={handleResizeStop}
+          handleClose={toggleVisibility}
           toggleMinimized={toggleMinimized}
-          minConstraints={minConstraints}
+          minConstraints={windowState.minConstraints}
         >
             <div style={{padding:"5px"}}>
             {floatValues.map((floatValue, index) => (

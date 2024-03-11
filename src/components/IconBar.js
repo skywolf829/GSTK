@@ -7,7 +7,7 @@ import SettingsMenu from './SettingsMenu';
 import { useWebSocket } from '../utils/WebSocketContext';
 import ContextMenu from './ContextMenu'; // Assuming you have this component
 
-const IconBar = ({ windowVisibleStates, manageWindow }) => {
+const IconBar = ({ windows, toggleWindowVisible, toggleWindowMinimized, setWindowPosition, handleFocus }) => {
   const { connected } = useWebSocket(); // Access the connected state from the context
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, windowKey: null });
 
@@ -43,11 +43,14 @@ const IconBar = ({ windowVisibleStates, manageWindow }) => {
     if (!contextMenu) return;
     
     if (option === 'reset') {
-      manageWindow("resetPosition", key);
+      const midscreen = {x:window.innerWidth / 2.0 - windows[key].size.width / 2.0, 
+      y:window.innerHeight / 2.0 - windows[key].size.height / 2.0};
+      setWindowPosition(key, midscreen);
+      handleFocus(key);
     } else if (option === 'minimize') {
-      manageWindow("toggleMinimize", key);
+      toggleWindowMinimized(key);
     } else if (option === 'close') {
-      manageWindow("toggleVisible", key);
+      toggleWindowVisible(key);
     }
     setContextMenu({ visible: false, x: 0, y: 0, windowKey: null });
   };
@@ -68,8 +71,8 @@ const IconBar = ({ windowVisibleStates, manageWindow }) => {
             : styles.serverDisconnected;
           return (          
             <div key={key} 
-            className={`${styles.icon} ${windowVisibleStates[key] ? styles.active : ''} ${isServerIcon ? iconStatusClass : ''}`} 
-            onClick={() => manageWindow("toggleVisible", key)}
+            className={`${styles.icon} ${windows[key].isVisible ? styles.active : ''} ${isServerIcon ? iconStatusClass : ''}`} 
+            onClick={() => toggleWindowVisible(key)}
             onContextMenu={(e) => handleRightClick(e, key)}
             >
               <FontAwesomeIcon icon={icon} />
@@ -86,7 +89,8 @@ const IconBar = ({ windowVisibleStates, manageWindow }) => {
           onClose={() => handleOptionClick('close', contextMenu.windowKey)}
           onMinimize={() => handleOptionClick('minimize', contextMenu.windowKey)}
           onResetPosition={() => handleOptionClick('reset', contextMenu.windowKey)}
-          currentlyOpen={windowVisibleStates[contextMenu.windowKey]}
+          currentlyOpen={windows[contextMenu.windowKey].isVisible}
+          currentlyMinimized={windows[contextMenu.windowKey].isMinimized}
         />
       )}
       </div>

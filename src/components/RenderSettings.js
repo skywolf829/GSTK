@@ -7,26 +7,17 @@ import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
 import "../css/Trainer.css"
 
-const RenderSettings = ({ bringToFront, onClose }) => {
+const RenderSettings = ({ windowKey, windowState, 
+    toggleVisibility, toggleMinimized,
+    handleDragStop, handleFocus,
+    handleResize, handleResizeStop })  => {
     
-    const title = "Render settings";
-    const minConstraints = [350, 210];
-
     // Input values states
     const [rendererEnabled, setRendererEnabled] = useState(true); 
     const [resolutionScaling, setResolutionScaling] = useState(1.0); 
     const [fov, setFov] = useState(70.0); 
     const [gaussianSize, setGaussianSize] = useState(1.0); 
     const [selectionTransparency, setSelectionTransparency] = useState(0.05); 
-
-    const {
-        isVisible, isMinimized, 
-        size, position, zIndex,
-        toggleVisibility, toggleMinimized,
-        handleDragStop, handleFocus,
-        handleResize, handleResizeStop,
-      } = useWindowSettings(title, minConstraints, bringToFront);
-
 
     // Websocket setup (from global context)
     const { subscribe, send } = useWebSocket();
@@ -72,20 +63,19 @@ const RenderSettings = ({ bringToFront, onClose }) => {
     
     return (
         <DraggableResizableWindow
-          isVisible={isVisible}
-          isMinimized={isMinimized}
-          position={position}
-          size={size}
-          zIndex={zIndex}
-          title={title}
-          onDragStop={handleDragStop}
-          onFocus={handleFocus}
-          onResize={handleResize}
-          onResizeStop={handleResizeStop}
-          onClose={onClose}
-          toggleVisibility={toggleVisibility}
+          windowKey={windowKey}
+          isMinimized={windowState.isMinimized}
+          position={windowState.position}
+          size={windowState.size}
+          zIndex={windowState.zIndex}
+          title={windowState.title}
+          handleDragStop={handleDragStop}
+          handleFocus={handleFocus}
+          handleResize={handleResize}
+          handleResizeStop={handleResizeStop}
+          handleClose={toggleVisibility}
           toggleMinimized={toggleMinimized}
-          minConstraints={minConstraints}
+          minConstraints={windowState.minConstraints}
         >
             <div style={{padding:"5px"}}>
                 <div>

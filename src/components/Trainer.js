@@ -7,25 +7,16 @@ import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
 import "../css/Trainer.css"
 
-const Trainer = ({ bringToFront, onClose }) => {
-
-    const title = "Training";
-    const minConstraints = [240, 135];
+const Trainer = ({ windowKey, windowState, 
+  toggleVisibility, toggleMinimized,
+  handleDragStop, handleFocus,
+  handleResize, handleResizeStop }) => {
 
     // Input values states
     const [training, setTraining] = useState(false);
     const [iterationData, setIterationData] = useState([0, 30000]); 
     const [lossData, setLossData] = useState(0.0); 
     const [trainStepTime, setTrainStepTime] = useState(0.0); 
-
-    const {
-        isVisible, isMinimized, 
-        size, position, zIndex,
-        toggleVisibility, toggleMinimized,
-        handleDragStop, handleFocus,
-        handleResize, handleResizeStop,
-      } = useWindowSettings(title, minConstraints, bringToFront);
-
 
     // Websocket setup (from global context)
     const { subscribe, send } = useWebSocket();
@@ -60,20 +51,19 @@ const Trainer = ({ bringToFront, onClose }) => {
 
     return (
         <DraggableResizableWindow
-          isVisible={isVisible}
-          isMinimized={isMinimized}
-          position={position}
-          size={size}
-          zIndex={zIndex}
-          title={title}
-          onDragStop={handleDragStop}
-          onFocus={handleFocus}
-          onResize={handleResize}
-          onResizeStop={handleResizeStop}
-          onClose={onClose}
-          toggleVisibility={toggleVisibility}
+          windowKey={windowKey}
+          isMinimized={windowState.isMinimized}
+          position={windowState.position}
+          size={windowState.size}
+          zIndex={windowState.zIndex}
+          title={windowState.title}
+          handleDragStop={handleDragStop}
+          handleFocus={handleFocus}
+          handleResize={handleResize}
+          handleResizeStop={handleResizeStop}
+          handleClose={toggleVisibility}
           toggleMinimized={toggleMinimized}
-          minConstraints={minConstraints}
+          minConstraints={windowState.minConstraints}
         >
             <div style={{ padding: "5px" }}>
                 <div className="info-container">

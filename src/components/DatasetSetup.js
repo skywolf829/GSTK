@@ -6,7 +6,11 @@ import useWindowSettings from '../utils/useWindowSettings';
 import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
 
-const DatasetSetup = ({ bringToFront, onClose }) => {
+const DatasetSetup = ({ windowKey, windowState, 
+    toggleVisibility, toggleMinimized,
+    handleDragStop, handleFocus,
+    handleResize, handleResizeStop }) => {
+
     const variable_names = [
         "Dataset path",
         "Data device",
@@ -20,9 +24,6 @@ const DatasetSetup = ({ bringToFront, onClose }) => {
         ""
     ];
 
-    const title = "Dataset Setup";
-    const minConstraints = [270, 170];
-
     // Input values states
     const [values, setValues] = useState(variable_defaults); 
     const [datasetLoaded, setDatasetLoaded] = useState(false);
@@ -32,15 +33,6 @@ const DatasetSetup = ({ bringToFront, onClose }) => {
         newValues[index] = value;
         setValues(newValues);
     };
-
-    const {
-        isVisible, isMinimized, 
-        size, position, zIndex,
-        toggleVisibility, toggleMinimized,
-        handleDragStop, handleFocus,
-        handleResize, handleResizeStop,
-      } = useWindowSettings(title, minConstraints, bringToFront);
-
 
     // Websocket setup (from global context)
     const { subscribe, send } = useWebSocket();
@@ -85,20 +77,19 @@ const DatasetSetup = ({ bringToFront, onClose }) => {
 
     return (
         <DraggableResizableWindow
-          isVisible={isVisible}
-          isMinimized={isMinimized}
-          position={position}
-          size={size}
-          zIndex={zIndex}
-          title={title}
-          onDragStop={handleDragStop}
-          onFocus={handleFocus}
-          onResize={handleResize}
-          onResizeStop={handleResizeStop}
-          onClose={onClose}
-          toggleVisibility={toggleVisibility}
+          windowKey={windowKey}
+          isMinimized={windowState.isMinimized}
+          position={windowState.position}
+          size={windowState.size}
+          zIndex={windowState.zIndex}
+          title={windowState.title}
+          handleDragStop={handleDragStop}
+          handleFocus={handleFocus}
+          handleResize={handleResize}
+          handleResizeStop={handleResizeStop}
+          handleClose={toggleVisibility}
           toggleMinimized={toggleMinimized}
-          minConstraints={minConstraints}
+          minConstraints={windowState.minConstraints}
         >
             <div style={{padding:"5px"}}>
             {values.map((value, index) => (
