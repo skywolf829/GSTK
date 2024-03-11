@@ -77,7 +77,7 @@ const TrainerSettings = ({ bringToFront, onClose }) => {
     const {
         isVisible, isMinimized, 
         size, position, zIndex,
-        toggleVisibility, toggleMinimized,
+        toggleMinimized,
         handleDragStop, handleFocus,
         handleResize, handleResizeStop,
       } = useWindowSettings(title, minConstraints, bringToFront);
@@ -152,7 +152,6 @@ const TrainerSettings = ({ bringToFront, onClose }) => {
           onResize={handleResize}
           onResizeStop={handleResizeStop}
           onClose={onClose}
-          toggleVisibility={toggleVisibility}
           toggleMinimized={toggleMinimized}
           minConstraints={minConstraints}
         >

@@ -1,7 +1,7 @@
 import React from 'react';
 import styles from '../css/ContextMenu.module.css'; // You need to create this CSS module
 
-const ContextMenu = ({ x, y, onResetPosition, onMinimize, onClose }) => {
+const ContextMenu = ({ x, y, onResetPosition, onMinimize, onClose, currentlyOpen }) => {
   const style = {
     top: y,
     left: x
@@ -16,7 +16,7 @@ const ContextMenu = ({ x, y, onResetPosition, onMinimize, onClose }) => {
         Minimize
       </button>
       <button className={styles.contextMenuItem} onClick={onClose}>
-        Close
+        {currentlyOpen ? "Close" : "Open"}
       </button>
     </div>
   );

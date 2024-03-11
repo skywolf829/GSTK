@@ -7,7 +7,6 @@ import styles from '../css/WindowStyles.module.css'; // Ensure you have the appr
 import HEADER_HEIGHT from '../utils/useWindowSettings'
 
 const DraggableResizableWindow = ({
-  isVisible,
   isMinimized,
   position,
   size,
