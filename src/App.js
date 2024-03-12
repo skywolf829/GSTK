@@ -4,6 +4,7 @@ import { WebSocketProvider } from './utils/WebSocketContext';
 import './css/App.css';
 import CanvasComponent from './components/CanvasComponent';
 import WindowController from './components/windowController';
+import { ModalProvider } from './components/ModalContext';
 
 function App() {
   
@@ -27,10 +28,12 @@ function App() {
 
   return (
     <WebSocketProvider>
-      <div className="App">
-        <WindowController bringToFront={bringToFront}/>
-        <CanvasComponent />
-      </div>
+      <ModalProvider>
+        <div className="App">
+          <WindowController bringToFront={bringToFront}/>
+          <CanvasComponent />
+        </div>
+      </ModalProvider>
     </WebSocketProvider>
   );
 }
