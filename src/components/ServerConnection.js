@@ -10,18 +10,22 @@ import DraggableResizableWindow from './DraggableResizableWindow';
 const ServerConnection = ({ windowKey, windowState, 
     toggleVisibility, toggleMinimized,
     handleDragStop, handleFocus,
-    handleResize, handleResizeStop }) => {
+    handleResize, handleResizeStop}) => {
     
 
     const [serverIp, setServerIp] = useState("localhost");
     const [serverPort, setServerPort] = useState("10789");
 
     // Websocket setup (from global context)
-    const { connect } = useWebSocket();
+    const { connect, connected, disconnect } = useWebSocket();
           
     const handleConnect = () => {
-        console.log('Connect to ' + serverIp + ":"+serverPort);
-        connect(serverIp, serverPort);
+        if(connected){
+            disconnect();
+        }
+        else{
+            connect(serverIp, serverPort);
+        }
     };
 
     return (
@@ -55,7 +59,7 @@ const ServerConnection = ({ windowKey, windowState,
                 onChange={(e) => setServerPort(e.target.value)}
                 placeholder="Server Port"
             />
-            <button onClick={handleConnect}>Connect</button>
+            <button onClick={handleConnect}>{ connected ? "Disconnect" : "Connect"}</button>
         </div>
         </DraggableResizableWindow>
       );

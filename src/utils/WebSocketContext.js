@@ -24,12 +24,12 @@ export const WebSocketProvider = ({ children }) => {
     socket.binaryType = 'blob'; // Ensure binary messages are received as Blob objects
 
     socket.addEventListener('open', function (event) {
-      console.log('Connected to WS Server');
+      console.log('Connected to ' + serverIp + ":"+ serverPort);
       setConnected(true); // Set connected state to true when the socket opens
     });
 
     // Your existing socket.onmessage and other event listeners here...
-
+    
     socket.onclose = () => {
       console.log('WebSocket Disconnected');
       setConnected(false); // Set connected state to false when the socket closes
@@ -68,7 +68,11 @@ export const WebSocketProvider = ({ children }) => {
 
     setWs(socket);
   };
-
+  const disconnect = () => {
+    if(ws){
+      ws.close();
+    }
+  };
   const subscribe = (filter, callback) => {
     const subscriber = { filter, callback };
     subscribersRef.current.push(subscriber);
@@ -96,7 +100,7 @@ export const WebSocketProvider = ({ children }) => {
   };
 
   return (
-    <WebSocketContext.Provider value={{ ws, connected, subscribe, send, connect}}>
+    <WebSocketContext.Provider value={{ ws, connected, subscribe, send, connect, disconnect}}>
       {children}
     </WebSocketContext.Provider>
   );
