@@ -19,8 +19,9 @@ export const WebSocketProvider = ({ children }) => {
     if (ws != null) {
       ws.close(); // Ensure any existing connection is closed
     }
-
-    const socket = new WebSocket(`ws://${serverIp}:${serverPort}`);
+    // Can only support non-encrypted since I dont have SSL
+    const socket_type = 'ws'; //window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const socket = new WebSocket(`${socket_type}://${serverIp}:${serverPort}`);
     socket.binaryType = 'blob'; // Ensure binary messages are received as Blob objects
 
     socket.addEventListener('open', function (event) {
