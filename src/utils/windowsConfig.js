@@ -19,7 +19,7 @@ import { faPaintBrush, faCog, faPlug ,
 
 export const windowsConfig = [
     {
-      title: 'Server Connection',
+      title: <span>Server Connection</span>,
       key: 'serverConnection',
       tooltip: 'Connect to server',
       component: ServerConnection,
@@ -28,7 +28,7 @@ export const windowsConfig = [
       minHeight: 125
     },
     {
-      title: 'Trainer',
+      title: <span>Trainer</span>,
       key: 'trainer',
       tooltip: 'Training window',
       component: Trainer,
@@ -37,7 +37,7 @@ export const windowsConfig = [
       minHeight: 150
     },    
     {
-      title: 'Dataset setup',
+      title: <span>Dataset setup</span>,
       key: 'datasetSetup',
       tooltip: 'Dataset loading',
       component: DatasetSetup,
@@ -46,7 +46,7 @@ export const windowsConfig = [
       minHeight: 170
     },   
     {
-      title: 'Trainer Settings',
+      title: <span>Trainer Settings</span>,
       key: 'trainerSettings',
       tooltip: 'Trainer settings',
       component: TrainerSettings,
@@ -55,7 +55,7 @@ export const windowsConfig = [
       minHeight: 490
     },     
     {
-      title: 'Render Settings',
+      title: <span>Render Settings</span>,
       key: 'rendererSettings',
       tooltip: 'Render settings',
       component: RenderSettings,

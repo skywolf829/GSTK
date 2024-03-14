@@ -1,6 +1,7 @@
 // WebSocketContext.js
 import React, { createContext, useContext, 
   useState, useRef, useEffect } from 'react';
+import { useModal } from '../components/ModalContext';
 
 const WebSocketContext = createContext(null);
 
@@ -10,6 +11,11 @@ export const WebSocketProvider = ({ children }) => {
   const [ws, setWs] = useState(null);
   const [connected, setConnected] = useState(false); // State to keep track of connection status
   const subscribersRef = useRef([]);
+  const { openModal, closeModal } = useModal();
+  const [dataReceived, setDataReceived] = useState(0);
+  let runningDataReceived = 0;
+  const [dataSent, setDataSent] = useState(0);
+  let runningDataSent = 0;
 
   let expectingBinary = false;
   let binarySize = 0;
@@ -35,11 +41,14 @@ export const WebSocketProvider = ({ children }) => {
       console.log('WebSocket Disconnected');
       setConnected(false); // Set connected state to false when the socket closes
       setWs(null); // Reset the WebSocket instance in state
+      closeModal();
     };
 
     socket.onmessage = async (event) => {
       if (expectingBinary && event.data instanceof Blob) {
         const blob = event.data;
+        const dataSize = blob.size;
+        runningDataReceived += dataSize;
         if (blob.size === binarySize) {
           // Notify subscribers interested in binary data of this type
           subscribersRef.current.forEach(({ filter, callback }) => {
@@ -50,6 +59,8 @@ export const WebSocketProvider = ({ children }) => {
         }
         expectingBinary = false;  // Reset for the next messages
       } else if (typeof event.data === 'string') {
+        const dataSize = new TextEncoder().encode(event.data).length; // Size in bytes
+        runningDataReceived += dataSize;
         const message = JSON.parse(event.data);
         if (message.type && 'binarySize' in message) {
           // Prepare to receive binary data in the next message
@@ -69,11 +80,13 @@ export const WebSocketProvider = ({ children }) => {
 
     setWs(socket);
   };
+
   const disconnect = () => {
     if(ws){
       ws.close();
     }
   };
+
   const subscribe = (filter, callback) => {
     const subscriber = { filter, callback };
     subscribersRef.current.push(subscriber);
@@ -89,6 +102,8 @@ export const WebSocketProvider = ({ children }) => {
       if (ws.readyState === WebSocket.OPEN) {
         const m = JSON.stringify(message);
         //console.log("Sending: " + m)
+        const dataSize = new TextEncoder().encode(m).length; // Size in bytes
+        runningDataSent += dataSize;
         ws.send(m);
       } 
       else{
@@ -100,8 +115,21 @@ export const WebSocketProvider = ({ children }) => {
     }
   };
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const kbps_received = (runningDataReceived / 1024) ; // Convert bytes to kilobytes and divide by time in seconds
+      const kbps_sent = (runningDataSent / 1024); // Convert bytes to kilobytes and divide by time in seconds
+      setDataReceived(kbps_received);
+      setDataSent(kbps_sent);
+      runningDataReceived = 0;
+      runningDataSent = 0;
+    }, 1000); // Update every second
+
+    return () => clearInterval(interval); // Cleanup the interval on unmount
+  }, []);
+
   return (
-    <WebSocketContext.Provider value={{ ws, connected, subscribe, send, connect, disconnect}}>
+    <WebSocketContext.Provider value={{ ws, connected, subscribe, send, connect, disconnect, dataSent, dataReceived}}>
       {children}
     </WebSocketContext.Provider>
   );

@@ -27,14 +27,14 @@ function App() {
   
 
   return (
-    <WebSocketProvider>
-      <ModalProvider>
+    <ModalProvider>
+      <WebSocketProvider>
         <div className="App">
           <WindowController bringToFront={bringToFront}/>
           <CanvasComponent />
         </div>
-      </ModalProvider>
-    </WebSocketProvider>
+      </WebSocketProvider>
+    </ModalProvider>
   );
 }
 

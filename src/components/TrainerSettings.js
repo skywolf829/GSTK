@@ -1,15 +1,16 @@
 
 
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import { useWebSocket, useWebSocketListener} from '../utils/WebSocketContext';
 import useWindowSettings from '../utils/useWindowSettings';
 import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
+import { useIconBar } from './IconBarContext';
 
 const TrainerSettings = ({ windowKey, windowState, 
     toggleVisibility, toggleMinimized,
     handleDragStop, handleFocus,
-    handleResize, handleResizeStop }) => {
+    handleResize, handleResizeStop, resetScreenPosition}) => {
     const variable_names = [
         "Total iterations",
         "Initial position learning rate",
@@ -68,6 +69,8 @@ const TrainerSettings = ({ windowKey, windowState,
     // Input values states
     const [floatValues, setFloatValues] = useState(variable_defaults); // Start with two float inputs
 
+    const { registerIcon } = useIconBar();
+
     const handleChange = (index, value) => {
         const newFloatValues = [...floatValues];
         newFloatValues[index] = value;
@@ -104,6 +107,33 @@ const TrainerSettings = ({ windowKey, windowState,
     // Use the custom hook to listen for messages of type 'test'
     useWebSocketListener(subscribe, 'trainingSettings', handleMessage);
 
+    useEffect(() => {
+        // Define the props for the Icon component
+        const contextMenuItems = [
+            "Reset position",
+            windowState.isMinimized ? "Maximize": "Minimize", 
+            windowState.isVisible ? "Close" :"Open"
+        ];
+        const contextMenuCallbacks = [
+            () => {resetScreenPosition(windowKey)},
+            () => {toggleMinimized(windowKey)},
+            () => {toggleVisibility(windowKey)}
+        ];
+        
+        const opacity =  windowState.isVisible ? 1.0 : 0.0;
+        const backgroundColor =`rgba(200, 200, 200, ${opacity})`
+        
+        const iconProps = {
+            windowKey: windowKey,
+            windowState: windowState, 
+            toggleWindowVisible: () => {toggleVisibility(windowKey)},
+            contextMenuItems: contextMenuItems,
+            contextMenuCallbacks: contextMenuCallbacks,
+            backgroundColor: backgroundColor
+        };
+        registerIcon(windowKey, iconProps);
+    }, [windowState.isVisible, windowState.isMinimized]);
+
     const handleClick = () => {
         const data = {
             total_iterations: floatValues[0],
@@ -131,6 +161,7 @@ const TrainerSettings = ({ windowKey, windowState,
     };
 
     return (
+        windowState.isVisible && (
         <DraggableResizableWindow
           windowKey={windowKey}
           isMinimized={windowState.isMinimized}
@@ -173,7 +204,7 @@ const TrainerSettings = ({ windowKey, windowState,
             ))}
             <button onClick={handleClick}>Update</button>
             </div>
-        </DraggableResizableWindow>
+        </DraggableResizableWindow>)
       );    
 };
 

@@ -8,7 +8,7 @@
 import React, {useState, useEffect} from 'react';
 import styles from '../css/SettingsButton.module.css'; // Ensure you have the appropriate styles
 import { useModal } from './ModalContext';
-import { useWebSocket, useWebSocketListener} from '../utils/WebSocketContext';
+import { useWebSocket} from '../utils/WebSocketContext';
 
 const SettingsMenu = () => {  
 
@@ -80,6 +80,7 @@ const SettingsMenu = () => {
     }
     
     // Update modal content whenever availableModels changes
+    
     useEffect(() => {
         if (isLoadModalVisible) {
             const content = (
@@ -135,7 +136,7 @@ const SettingsMenu = () => {
           setModalContent(content);
         }
     }, [availableModels, filePath, dropDownSelect, isLoadModalVisible, isSaveModalVisible]);
-
+    
     useEffect(() => {
         if(isSaveModalVisible || isLoadModalVisible){
             if(modalContent){
@@ -180,7 +181,8 @@ const SettingsMenu = () => {
                 onMouseEnter={() => setIsSubMenuVisible(true)}
                 onMouseLeave={() => setIsSubMenuVisible(false)}>
             {title}
-            {isSubMenuVisible && <SubMenu items={items} />}
+            {isSubMenuVisible && 
+            (<SubMenu items={items} />)}
             </div>
         );
     };

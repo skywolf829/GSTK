@@ -1,23 +1,27 @@
 
 
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import { useWebSocket, useWebSocketListener} from '../utils/WebSocketContext';
 import useWindowSettings from '../utils/useWindowSettings';
 import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
 import "../css/Trainer.css"
+import { useIconBar } from './IconBarContext';
 
 const RenderSettings = ({ windowKey, windowState, 
     toggleVisibility, toggleMinimized,
     handleDragStop, handleFocus,
-    handleResize, handleResizeStop })  => {
+    handleResize, handleResizeStop ,
+    resetScreenPosition, setTitle})  => {
     
     // Input values states
     const [rendererEnabled, setRendererEnabled] = useState(true); 
     const [resolutionScaling, setResolutionScaling] = useState(1.0); 
     const [fov, setFov] = useState(70.0); 
     const [gaussianSize, setGaussianSize] = useState(1.0); 
+    const [jpegQuality, setJpegQuality] = useState(85); 
     const [selectionTransparency, setSelectionTransparency] = useState(0.05); 
+    const { registerIcon } = useIconBar();
 
     // Websocket setup (from global context)
     const { subscribe, send } = useWebSocket();
@@ -28,14 +32,51 @@ const RenderSettings = ({ windowKey, windowState,
         setFov(message.data.fov);
         setGaussianSize(message.data.gaussianSize);
         setSelectionTransparency(message.data.selectionTransparency);
+        setJpegQuality(message.data.jpegQuality);
     };
     const updateRendererToggled = (message) => {
         setRendererEnabled(message.data.rendererEnabled);
     };
+    const updateFPS = (message) => {
+        setTitle(windowKey, 
+            <span>Render Settings
+                <span>{message.data.fps.toFixed(2)} FPS
+                </span>
+            </span>);
+        //setTooltip(windowKey, `Render settings\nFPS: ${message.data.fps.toFixed(2)}`);
+    };
+
+    useEffect(() => {
+        // Define the props for the Icon component
+        const contextMenuItems = [
+            "Reset position",
+            windowState.isMinimized ? "Maximize": "Minimize", 
+            windowState.isVisible ? "Close" :"Open"
+        ];
+        const contextMenuCallbacks = [
+            () => {resetScreenPosition(windowKey)},
+            () => {toggleMinimized(windowKey)},
+            () => {toggleVisibility(windowKey)}
+        ];
+        
+        const opacity =  windowState.isVisible ? 1.0 : 0.0;
+        const backgroundColor =`rgba(200, 200, 200, ${opacity})`
+        
+        const iconProps = {
+            windowKey: windowKey,
+            windowState: windowState, 
+            toggleWindowVisible: () => {toggleVisibility(windowKey)},
+            contextMenuItems: contextMenuItems,
+            contextMenuCallbacks: contextMenuCallbacks,
+            backgroundColor: backgroundColor
+        };
+        registerIcon(windowKey, iconProps);
+    }, [windowState.isVisible, windowState.isMinimized, windowState.tooltip]);
 
     // Use the custom hook to listen for messages of type 'test'
     useWebSocketListener(subscribe, 'renderSettings', updateRenderSettings);
     useWebSocketListener(subscribe, 'renderEnabled', updateRendererToggled);
+    useWebSocketListener(subscribe, 'rendererFPS', updateFPS);
 
     const handleClick = () => {
         const message = {
@@ -44,7 +85,8 @@ const RenderSettings = ({ windowKey, windowState,
                 resolution_scaling: resolutionScaling,
                 fov: fov,
                 gaussian_size: gaussianSize,
-                selection_transparency: selectionTransparency
+                selection_transparency: selectionTransparency,
+                jpeg_quality: jpegQuality
             }
         };
         send(message);
@@ -62,6 +104,7 @@ const RenderSettings = ({ windowKey, windowState,
     };
     
     return (
+        windowState.isVisible && (
         <DraggableResizableWindow
           windowKey={windowKey}
           isMinimized={windowState.isMinimized}
@@ -160,10 +203,26 @@ const RenderSettings = ({ windowKey, windowState,
                         </div>
                         {selectionTransparency}
                     </div>
+                    <div className="info-container">
+                        <label>
+                            JPEG quality:
+                        </label>
+                        <div style={{alignItems:"center", flexGrow:1}}>
+                            <input 
+                                type="range" 
+                                min="1" 
+                                max="100" 
+                                step="1" 
+                                value={jpegQuality}
+                                onChange={(e) => setJpegQuality(parseFloat(e.target.value))}
+                            />
+                        </div>
+                        {jpegQuality}
+                    </div>
                     <button onClick={handleClick}>Update settings</button>
                 </div>
             </div>
-        </DraggableResizableWindow>
+        </DraggableResizableWindow>)
       );    
 };
 

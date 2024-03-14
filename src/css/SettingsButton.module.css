@@ -1,7 +1,7 @@
 
 .settingsContainer {
     position: relative;
-    z-index: 1000;
+    z-index: 8000;
   }
   
   .settingsButton {
@@ -12,7 +12,7 @@
     cursor: pointer;
     border: 1px solid #ccc;
     border-radius: 8px;
-    z-index: 1000;
+    z-index: 8000;
     
   }
   
@@ -31,7 +31,7 @@
     display: flex;
     flex-direction: column;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    z-index: 1000;
+    z-index: 8000;
   }
   
   .menuItem {
@@ -40,7 +40,7 @@
     background-color: #f0f0f0;
     border-radius: 5px;
     cursor: pointer;
-    z-index: 1000;
+    z-index: 8000;
   }
   
   .menuItem:hover {
@@ -55,7 +55,7 @@
     background-color: white;
     box-shadow: -1px 0 5px rgba(0, 0, 0, 0.2);
     border-radius: 5px;
-    z-index: 1001;
+    z-index: 8001;
   }
   
   .menuItem:hover .submenu {

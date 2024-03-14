@@ -19,6 +19,7 @@ const DraggableResizableWindow = ({
     handleClose,
     toggleMinimized,
     minConstraints,
+    barColor = 'rgb(224, 224, 224)',
     children, // The unique content of each window will be passed as children
 }) => {
 
@@ -60,8 +61,10 @@ const DraggableResizableWindow = ({
                 style={{ width: size.width, height: size.height, zIndex }}
                 onClick={() => handleFocus(windowKey)}
                 >
-            <div className={`${styles.windowHeader} drag-handle`}>
-                <span>{title}</span>
+            <div className={`${styles.windowHeader} drag-handle`}
+                style={{backgroundColor: barColor}}
+            >
+                {title}
                 <div>
                     <button onClick={() => handleMinimizeClick(windowKey)} 
                         className={styles.minimizeButton}>-</button>
