@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700&display=swap');
 
 /* App.css */
 html, body, #root, .App {
@@ -33,6 +34,137 @@ canvas {
   -webkit-tap-highlight-color: rgba(255, 255, 255, 0); /* mobile webkit */
 }
 
+.toolbar-container {
+  display: flex;
+  z-index: 1000;
+  position: absolute; /* Position the toolbar as needed */
+  flex-direction: row; /* Lay out toolbar and tool-component side by side */
+  align-items: flex-start; /* Align items to the top */
+  gap: 4px; /* Space between toolbar and tool-component */
+}
+
+.toolbar-window {
+  /* The pop-out window styles go here */
+  background: linear-gradient(90deg, rgba(93,149,198,1) 0%, rgba(93,149,198,1) 100%);
+  padding: 2px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(93,149,198,1);
+  width: 200px;
+}
+.toolbar-window-content {
+  /* The pop-out window styles go here */
+  font-family: 'Nunito', sans-serif;
+  font-size: small;
+  background: #ffffff;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #eaeaea;
+}
+.toolbar-window-content span {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.toolbar-window-content div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0;
+}
+
+.toolbar-window-content label {
+  font-weight: 600;
+  color: #555;
+  padding: 2px;
+}
+.toolbar-window-content select {
+  width: 100%;
+  accent-color: #5d95c6;
+}
+
+.toolbar-window-content input[type="checkbox"] {
+  accent-color: #5d95c6;
+}
+
+.toolbar-window-content input[type="range"] {
+  width: 100%;
+  accent-color: #5d95c6;
+}
+.toolbar-window-content input[type="number"] {
+  width: 100%;
+  accent-color: #5d95c6;
+}
+
+.toolbar-window-content input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #5d95c6;
+  cursor: pointer;
+}
+
+.toolbar-window-content input[type="range"]::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: #5d95c6;
+  cursor: pointer;
+}
+
+.toolbar-window-content button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 5px;
+  background-color: #5d95c6;
+  color: white;
+  font-weight: 700;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.toolbar-window-content button:hover {
+  background-color: #4a7ba7;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .toolbar-window-content {
+    padding: 10px;
+  }
+
+  .toolbar-window-content span {
+    font-size: 16px;
+  }
+
+  .toolbar-window-content button {
+    padding: 8px 16px;
+  }
+}
+/*
+.toolbar-window::before {
+  content: "";
+  position: absolute;
+  
+  background-color: transparent;
+  top: 0%;
+  left: 99%;
+  height: 50px;
+  width: 25px;
+  border-top-right-radius: 8px;
+  border-bottom-right-radius: 8px;
+  box-shadow: 0px -10px 0 0 #F66969;
+  z-index: 1000; 
+  rotate: 0deg;
+}*/
+
 .toolbar {
   display: flex;
   flex-direction: column; /* Stack tools vertically */
@@ -41,21 +173,50 @@ canvas {
   cursor: move;
   z-index: 1000;
   border-radius: 8px;
-  position: absolute; /* Position the toolbar as needed */
-  top: 20px; /* Adjust as needed */
-  left: 20px; /* Adjust as needed */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
 }
 
 .tool-icon {
   margin: 5px 0; /* Adjust spacing for vertical layout */
   padding: 10px;
   background: #f0f0f0;
-  border-radius: 50%;
+  border-radius: 30%;
   cursor: pointer;
+  position: relative; /* Needed for absolute positioning inside */
 }
 
-.tool-icon:hover, .tool-icon.selected {
-  background: #ddd;
+.tool-icon:hover{
+  background: #5d95c6;  
+}
+
+.tool-icon.selected {
+  background: #5d95c6;  
+  border-top-right-radius: 0px;
+  border-bottom-right-radius: 0px;
+}
+
+.tool-icon.selected::before {
+  content: '';
+  width: 15px;
+  height: 100%;
+  background: transparent;
+  position: absolute;
+  border-bottom-right-radius: 8px;
+  top: -100%;
+  left: 99%;
+  box-shadow: 0px 30px 0 0 #5d95c6;
+}
+
+.tool-icon.selected::after {
+  content: '';
+  width: 15px;
+  height: 100%;
+  background: transparent;
+  position: absolute;
+  border-top-right-radius: 8px;
+  top: 100%;
+  left: 99%;
+  box-shadow: 0px -30px 0 0 #5d95c6;
 }
 
 .canvas-container {

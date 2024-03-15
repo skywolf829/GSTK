@@ -1,8 +1,7 @@
 
 
 import React, {useState, useEffect} from 'react';
-import { useWebSocket, useWebSocketListener} from '../utils/WebSocketContext';
-import useWindowSettings from '../utils/useWindowSettings';
+import { useWebSocket, useWebSocketListener} from './WebSocketContext';
 import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
 import "../css/Trainer.css"
@@ -56,25 +55,31 @@ const Trainer = ({ windowKey, windowState,
           backgroundColor: getStateColorRGBA()
       };
       registerIcon(windowKey, iconProps);
-  }, [windowState.isVisible, windowState.isMinimized, training, connected]);
+  }, [windowState.isVisible, windowState.isMinimized, connected]);
 
-    const updateTrainingInfo = (newTraining, newIterationData, 
+    const updateTrainingInfo = (newIterationData, 
         newLossData, newTrainStepTime) => {
-        setTraining(newTraining);
         setIterationData(newIterationData); 
         setLossData(newLossData); 
         setTrainStepTime(newTrainStepTime); 
+        
     };
 
       // Logic to handle the message
-    const handleMessage = (message) => {
-        updateTrainingInfo(message.data.training, 
+    const handleStateMessage = (message) => {
+        updateTrainingInfo(
             [message.data.iteration, message.data.totalIterations], 
             message.data.loss, message.data.stepTime);
     };
 
+      // Logic to handle the message
+      const handleIsTraining = (message) => {
+        setTraining(message.data.training);
+    };
+
     // Use the custom hook to listen for messages of type 'test'
-    useWebSocketListener(subscribe, 'trainingState', handleMessage);
+    useWebSocketListener(subscribe, 'trainingState', handleStateMessage);
+    useWebSocketListener(subscribe, 'isTraining', handleIsTraining);
 
     const handleTrainClick = () => {
         const message = {

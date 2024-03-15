@@ -1,8 +1,7 @@
 
 
 import React, {useState, useEffect} from 'react';
-import { useWebSocket, useWebSocketListener} from '../utils/WebSocketContext';
-import useWindowSettings from '../utils/useWindowSettings';
+import { useWebSocket, useWebSocketListener} from './WebSocketContext';
 import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
 import "../css/Trainer.css"
@@ -38,14 +37,17 @@ const RenderSettings = ({ windowKey, windowState,
         setRendererEnabled(message.data.rendererEnabled);
     };
     const updateFPS = (message) => {
+        
         setTitle(windowKey, 
             <span>Render Settings
                 <span>{message.data.fps.toFixed(2)} FPS
                 </span>
             </span>);
         //setTooltip(windowKey, `Render settings\nFPS: ${message.data.fps.toFixed(2)}`);
+        
     };
 
+    
     useEffect(() => {
         // Define the props for the Icon component
         const contextMenuItems = [
@@ -71,7 +73,7 @@ const RenderSettings = ({ windowKey, windowState,
             backgroundColor: backgroundColor
         };
         registerIcon(windowKey, iconProps);
-    }, [windowState.isVisible, windowState.isMinimized, windowState.tooltip]);
+    }, [windowState.isVisible, windowState.isMinimized]);
 
     // Use the custom hook to listen for messages of type 'test'
     useWebSocketListener(subscribe, 'renderSettings', updateRenderSettings);

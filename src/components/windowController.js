@@ -2,9 +2,7 @@
   
 // WindowController.js
 import React, { useState, useEffect, useCallback } from 'react';
-import { windowsConfig } from '../utils/windowsConfig';
-import IconBar from './IconBar'; // Update with the correct path
-import { IconBarProvider } from './IconBarContext';
+import { windowsConfig } from '../windowsConfig';
 
 const HEADER_HEIGHT = 30; // Assume a fixed header height for minimized view
 
@@ -44,10 +42,11 @@ const WindowController = () => {
     const [windows, setWindows] = useState(initialWindowStates);
     
     // Save to local storage whenever windows state changes
+    
     useEffect(() => {
         localStorage.setItem('windows', JSON.stringify(windows));
     }, [windows]);
-
+    
     
     const resetScreenPosition = (windowKey) => {
         const midscreen = { x: window.innerWidth / 2.0 - windows[windowKey].size.width / 2.0, 
@@ -71,7 +70,7 @@ const WindowController = () => {
     const toggleMinimized = useCallback((key) => {
         setWindows((currentWindows) => {
             const currentWindow = currentWindows[key];
-            let newSize, newOriginalSize;
+            let newSize, newOriginalSize, newMinSize;
     
             if (!currentWindow.isMinimized) {
                 // Minimizing: save the current size and set height to header height
@@ -79,14 +78,15 @@ const WindowController = () => {
                 newSize = { ...currentWindow.size, 
                     width:currentWindow.size.width, 
                     height: HEADER_HEIGHT };
+                newMinSize = [initialWindowStates[key].minConstraints[0], HEADER_HEIGHT];
             } else {
                 // Un-minimizing: restore the original size
                 currentWindow.originalSize.width = currentWindow.size.width;
                 newSize = currentWindow.originalSize || currentWindow.size;
                 newOriginalSize = currentWindow.originalSize;
-
+                newMinSize = initialWindowStates[key].minConstraints;
             }
-    
+            console.log(newMinSize);
             return {
                 ...currentWindows,
                 [key]: {
@@ -94,6 +94,7 @@ const WindowController = () => {
                     isMinimized: !currentWindow.isMinimized,
                     size: newSize,
                     originalSize: newOriginalSize,
+                    minConstraints: newMinSize
                 },
             };
         });
@@ -202,30 +203,27 @@ const WindowController = () => {
             },
         }));
     }, []);
-
+    
     return (
         <>
-        <IconBarProvider>
-            <IconBar />
-            {windowsConfig.map(winConfig => {
-                const WindowComponent = winConfig.component;
-                return <WindowComponent
-                    windowKey={winConfig.key}
-                    windowState={windows[winConfig.key]}
-                    setWindowPosition={setPosition}
-                    toggleVisibility={toggleVisibility}                
-                    toggleMinimized={toggleMinimized}   
-                    resetScreenPosition={resetScreenPosition}   
-                    handleDragStop={handleDragStop}          
-                    handleFocus={handleFocus}                
-                    handleResize={handleResize}
-                    handleResizeStop={handleResizeStop}
-                    setTooltip={setTooltip}
-                    setTitle={setTitle}
-                />
-            })}
-            </IconBarProvider>
-         </>
+        {windowsConfig.map(winConfig => {
+            const WindowComponent = winConfig.component;
+            return <WindowComponent
+                windowKey={winConfig.key}
+                windowState={windows[winConfig.key]}
+                setWindowPosition={setPosition}
+                toggleVisibility={toggleVisibility}                
+                toggleMinimized={toggleMinimized}   
+                resetScreenPosition={resetScreenPosition}   
+                handleDragStop={handleDragStop}          
+                handleFocus={handleFocus}                
+                handleResize={handleResize}
+                handleResizeStop={handleResizeStop}
+                setTooltip={setTooltip}
+                setTitle={setTitle}
+            />
+        })}
+        </>
     );
 };
 

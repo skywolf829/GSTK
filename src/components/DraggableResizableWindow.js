@@ -1,7 +1,7 @@
 // DraggableResizableWindow.js
 import React from 'react';
 import Draggable from 'react-draggable';
-import { Resizable, ResizableBox } from 'react-resizable';
+import { Resizable } from 'react-resizable';
 import 'react-resizable/css/styles.css';
 import styles from '../css/WindowStyles.module.css'; // Ensure you have the appropriate styles
 

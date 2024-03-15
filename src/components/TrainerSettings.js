@@ -1,8 +1,7 @@
 
 
 import React, {useState, useEffect} from 'react';
-import { useWebSocket, useWebSocketListener} from '../utils/WebSocketContext';
-import useWindowSettings from '../utils/useWindowSettings';
+import { useWebSocket, useWebSocketListener} from './WebSocketContext';
 import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
 import { useIconBar } from './IconBarContext';
@@ -11,6 +10,7 @@ const TrainerSettings = ({ windowKey, windowState,
     toggleVisibility, toggleMinimized,
     handleDragStop, handleFocus,
     handleResize, handleResizeStop, resetScreenPosition}) => {
+    
     const variable_names = [
         "Total iterations",
         "Initial position learning rate",
@@ -105,7 +105,7 @@ const TrainerSettings = ({ windowKey, windowState,
     };
 
     // Use the custom hook to listen for messages of type 'test'
-    useWebSocketListener(subscribe, 'trainingSettings', handleMessage);
+    useWebSocketListener(subscribe, 'trainingSettingsState', handleMessage);
 
     useEffect(() => {
         // Define the props for the Icon component

@@ -52,25 +52,24 @@ const IconBar = () => {
       };
     }, [contextMenu.visible]);
   
-
   return (
     <div>
       <div className={styles.iconBar}>
-      {Object.keys(icons).map(key => (
-        <div key={key}>
-            < Icon {...icons[key]} handleRightClick={handleRightClick} />
-        </div>
-      ))}
+        {Object.keys(icons).map(key => (
+          <div key={key}>
+              < Icon {...icons[key]} handleRightClick={handleRightClick} />
+          </div>
+        ))}
       
-      {contextMenu.visible && (
-            <ContextMenu 
-            x={contextMenu.x} 
-            y={contextMenu.y} 
-            items={contextMenu.items}
-            callbacks={contextMenu.callbacks}
-            />
+        {contextMenu.visible && (
+              <ContextMenu 
+              x={contextMenu.x} 
+              y={contextMenu.y} 
+              items={contextMenu.items}
+              callbacks={contextMenu.callbacks}
+              />
         )}
-      <SettingsMenu />
+        <SettingsMenu />
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 // WebSocketContext.js
 import React, { createContext, useContext, 
   useState, useRef, useEffect } from 'react';
-import { useModal } from '../components/ModalContext';
+import { useModal } from './ModalContext';
 
 const WebSocketContext = createContext(null);
 
@@ -11,11 +11,8 @@ export const WebSocketProvider = ({ children }) => {
   const [ws, setWs] = useState(null);
   const [connected, setConnected] = useState(false); // State to keep track of connection status
   const subscribersRef = useRef([]);
+  const sendSubscribersRef = useRef([]);
   const { openModal, closeModal } = useModal();
-  const [dataReceived, setDataReceived] = useState(0);
-  let runningDataReceived = 0;
-  const [dataSent, setDataSent] = useState(0);
-  let runningDataSent = 0;
 
   let expectingBinary = false;
   let binarySize = 0;
@@ -48,19 +45,17 @@ export const WebSocketProvider = ({ children }) => {
       if (expectingBinary && event.data instanceof Blob) {
         const blob = event.data;
         const dataSize = blob.size;
-        runningDataReceived += dataSize;
         if (blob.size === binarySize) {
           // Notify subscribers interested in binary data of this type
           subscribersRef.current.forEach(({ filter, callback }) => {
             if (filter({ type: messageType })) {
-              callback(blob);
+              callback({ type: messageType, size: dataSize, data: blob });
             }
           });
         }
         expectingBinary = false;  // Reset for the next messages
       } else if (typeof event.data === 'string') {
         const dataSize = new TextEncoder().encode(event.data).length; // Size in bytes
-        runningDataReceived += dataSize;
         const message = JSON.parse(event.data);
         if (message.type && 'binarySize' in message) {
           // Prepare to receive binary data in the next message
@@ -71,6 +66,7 @@ export const WebSocketProvider = ({ children }) => {
           // Notify subscribers for non-binary messages
           subscribersRef.current.forEach(({ filter, callback }) => {
             if (filter(message)) {
+              message.size = dataSize;
               callback(message);
             }
           });
@@ -96,6 +92,16 @@ export const WebSocketProvider = ({ children }) => {
     };
   };
 
+  const subscribeSend = (filter, callback) => {
+    const subscriber = { filter, callback };
+    sendSubscribersRef.current.push(subscriber);
+    // Return an unsubscribe function
+    return () => {
+      sendSubscribersRef.current = sendSubscribersRef.current.filter(sub => sub !== subscriber);
+    };
+  };
+
+
   // Function to send messages to the server
   const send = (message) => {
     if(ws){
@@ -103,7 +109,12 @@ export const WebSocketProvider = ({ children }) => {
         const m = JSON.stringify(message);
         //console.log("Sending: " + m)
         const dataSize = new TextEncoder().encode(m).length; // Size in bytes
-        runningDataSent += dataSize;
+        message.size = dataSize;
+        subscribersRef.current.forEach(({ filter, callback }) => {
+          if (filter(message)) {
+            callback(message);
+          }
+        });
         ws.send(m);
       } 
       else{
@@ -115,21 +126,8 @@ export const WebSocketProvider = ({ children }) => {
     }
   };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const kbps_received = (runningDataReceived / 1024) ; // Convert bytes to kilobytes and divide by time in seconds
-      const kbps_sent = (runningDataSent / 1024); // Convert bytes to kilobytes and divide by time in seconds
-      setDataReceived(kbps_received);
-      setDataSent(kbps_sent);
-      runningDataReceived = 0;
-      runningDataSent = 0;
-    }, 1000); // Update every second
-
-    return () => clearInterval(interval); // Cleanup the interval on unmount
-  }, []);
-
   return (
-    <WebSocketContext.Provider value={{ ws, connected, subscribe, send, connect, disconnect, dataSent, dataReceived}}>
+    <WebSocketContext.Provider value={{ ws, connected, subscribe, send, subscribeSend, connect, disconnect}}>
       {children}
     </WebSocketContext.Provider>
   );
@@ -138,7 +136,9 @@ export const WebSocketProvider = ({ children }) => {
 export const useWebSocketListener = (subscribe, messageType, callback) => {
   useEffect(() => {
     // Define the message filter based on the messageType parameter
-    const messageFilter = (message) => message.type === messageType;
+    const messageFilter = messageType === "*"
+      ? () => true // Always return true for wildcard subscriptions
+      : (message) => message.type === messageType;
     
     // Subscribe to messages that pass the filter
     const unsubscribe = subscribe(messageFilter, callback);
@@ -146,4 +146,19 @@ export const useWebSocketListener = (subscribe, messageType, callback) => {
     // Unsubscribe from messages when the component unmounts
     return () => unsubscribe();
   }, [subscribe, messageType, callback]);
+};
+
+export const useWebSocketSendListener = (subscribeSend, messageType, callback) => {
+  useEffect(() => {
+    // Define the message filter based on the messageType parameter
+    const messageFilter = messageType === "*"
+      ? () => true // Always return true for wildcard subscriptions
+      : (message) => message.type === messageType;
+    
+    // Subscribe to messages that pass the filter
+    const unsubscribe = subscribeSend(messageFilter, callback);
+
+    // Unsubscribe from messages when the component unmounts
+    return () => unsubscribe();
+  }, [subscribeSend, messageType, callback]);
 };

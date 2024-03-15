@@ -8,7 +8,7 @@
 import React, {useState, useEffect} from 'react';
 import styles from '../css/SettingsButton.module.css'; // Ensure you have the appropriate styles
 import { useModal } from './ModalContext';
-import { useWebSocket} from '../utils/WebSocketContext';
+import { useWebSocket, useWebSocketListener} from './WebSocketContext';
 
 const SettingsMenu = () => {  
 
@@ -21,37 +21,32 @@ const SettingsMenu = () => {
     const [modalContent, setModalContent] = useState(null); // State to hold modal content
     const [isLoadModalVisible, setLoadModalVisible] = useState(false);
     const [isSaveModalVisible, setSaveModalVisible] = useState(false);
+    const { subscribe, send, connected } = useWebSocket();
 
-    const { subscribe, send } = useWebSocket();
+    const handleAvailableModels = (message) => {
+        setAvailableModels(message.data.models); // Adjust according to the shape of your response
+    };
 
-    useEffect(() => {
-        const unsubscribe = subscribe(
-          (message) => message.type === 'availableModels', // Adjust this according to your message protocol
-          (data) => {
-            handleNewModels(data.data.models); // Adjust according to the shape of your response
-          }
-        );
-      
-        return () => unsubscribe();
-      }, [subscribe]);
+    useWebSocketListener(subscribe, 'availableModels', handleAvailableModels);
 
     const handleChange = (value) => {
         setFilePath(value);
     };
 
-    const handleNewModels = (newModels) => {
-        setAvailableModels(newModels);
-    };
-
     const handleLoadModal = () => {
-        setIsMenuVisible(false);
-        send({ type: 'requestAvailableModels', data: {} });   
-        setLoadModalVisible(true);
+        console.log(connected);
+        if(connected){
+            setIsMenuVisible(false);
+            send({ type: 'requestAvailableModels', data: {} });   
+            setLoadModalVisible(true);
+        }
     };
 
     const handleSaveModal = () => {
-        setIsMenuVisible(false);
-        setSaveModalVisible(true);
+        if(connected){
+            setIsMenuVisible(false);
+            setSaveModalVisible(true);
+        }
     };
       
     const resetModal = () => {
@@ -80,6 +75,7 @@ const SettingsMenu = () => {
     }
     
     // Update modal content whenever availableModels changes
+    
     
     useEffect(() => {
         if (isLoadModalVisible) {
@@ -137,6 +133,7 @@ const SettingsMenu = () => {
         }
     }, [availableModels, filePath, dropDownSelect, isLoadModalVisible, isSaveModalVisible]);
     
+
     useEffect(() => {
         if(isSaveModalVisible || isLoadModalVisible){
             if(modalContent){
@@ -147,7 +144,7 @@ const SettingsMenu = () => {
             }
         }
     }, [modalContent]);
-
+    
     // Items in the file selection
     const modelItems = [
         { name: 'Load', callback: () => handleLoadModal() },
@@ -161,16 +158,16 @@ const SettingsMenu = () => {
     ];
 
     const SubMenu = ({ items }) => {
-    return (
-        <div className={styles.submenu}>
-        {items.map((item, index) => (
-            <a 
-            key={index} href="#!" onClick={item.callback}>
-            {item.name}
-            </a>
-        ))}
-        </div>
-    );
+        return (
+            <div className={styles.submenu}>
+            {items.map((item, index) => (
+                <a 
+                key={index} href="#!" onClick={item.callback}>
+                {item.name}
+                </a>
+            ))}
+            </div>
+        );
     };
 
     const MenuItem = ({ title, items }) => {
@@ -186,7 +183,7 @@ const SettingsMenu = () => {
             </div>
         );
     };
-
+    
     return (
         <div className={styles.settingsContainer}>
         <button className={styles.settingsButton} onClick={() => setIsMenuVisible(!isMenuVisible)}>

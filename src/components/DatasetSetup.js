@@ -1,7 +1,7 @@
 
 
 import React, {useState, useEffect} from 'react';
-import { useWebSocket, useWebSocketListener} from '../utils/WebSocketContext';
+import { useWebSocket, useWebSocketListener} from './WebSocketContext';
 import 'react-resizable/css/styles.css';
 import DraggableResizableWindow from './DraggableResizableWindow';
 import { useModal } from './ModalContext';

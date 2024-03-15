@@ -1,11 +1,12 @@
 import React, { useState, useEffect} from 'react';
-import { WebSocketProvider } from './utils/WebSocketContext';
+import { WebSocketProvider } from './components/WebSocketContext';
 
 import './css/App.css';
 import CanvasComponent from './components/CanvasComponent';
 import WindowController from './components/windowController';
 import { ModalProvider } from './components/ModalContext';
-
+import { IconBarProvider } from './components/IconBarContext';
+import IconBar from './components/IconBar';
 function App() {
   
   
@@ -19,18 +20,16 @@ function App() {
   }, [highestZIndex]);
 
 
-  const bringToFront = () => {
-    setHighestZIndex(highestZIndex + 1);
-    return highestZIndex + 1;
-  };
-
   
 
   return (
     <ModalProvider>
       <WebSocketProvider>
         <div className="App">
-          <WindowController bringToFront={bringToFront}/>
+          <IconBarProvider>
+            <IconBar />
+            <WindowController />
+          </IconBarProvider>
           <CanvasComponent />
         </div>
       </WebSocketProvider>

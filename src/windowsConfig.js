@@ -1,12 +1,11 @@
 // windowsConfig.js
 // This file exports a configuration for all the windows in the app
-import ExampleWindow from "../components/ExampleWindow";
-import ServerConnection from "../components/ServerConnection";
-import TrainerSettings from "../components/TrainerSettings";
-import Toolbar from "../components/Toolbar";
-import DatasetSetup from "../components/DatasetSetup";
-import Trainer from "../components/Trainer";
-import RenderSettings from "../components/RenderSettings";
+import ServerConnection from "./components/ServerConnection";
+import TrainerSettings from "./components/TrainerSettings";
+import Toolbar from "./components/Toolbar";
+import DatasetSetup from "./components/DatasetSetup";
+import Trainer from "./components/Trainer";
+import RenderSettings from "./components/RenderSettings";
 
 
 import { faPaintBrush, faCog, faPlug ,
@@ -24,7 +23,7 @@ export const windowsConfig = [
       tooltip: 'Connect to server',
       component: ServerConnection,
       icon: faPlug,
-      minWidth: 220,
+      minWidth: 350,
       minHeight: 125
     },
     {
