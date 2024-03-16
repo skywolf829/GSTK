@@ -11,7 +11,7 @@ const Trainer = ({ windowKey, windowState,
   toggleVisibility, toggleMinimized,
   handleDragStop, handleFocus,
   handleResize, handleResizeStop,
-  resetScreenPosition }) => {
+  resetScreenPosition, setTitle }) => {
 
     // Input values states
     const [training, setTraining] = useState(false);
@@ -25,7 +25,7 @@ const Trainer = ({ windowKey, windowState,
     const { connected } = useWebSocket();
 
     const getStateColorRGBA = () => {
-      const opacity =  windowState.isVisible ? 1.0 : 0.0;
+      const opacity =  windowState.isVisible ? 1.0 : 0.3;
       return training && connected ? `rgba(0, 122, 31, ${opacity})` : `rgba(255, 150, 50, ${opacity})`;
     };
     const getStateColorRGB = () => {
@@ -62,14 +62,29 @@ const Trainer = ({ windowKey, windowState,
         setIterationData(newIterationData); 
         setLossData(newLossData); 
         setTrainStepTime(newTrainStepTime); 
+        updateFPS(newTrainStepTime);
         
     };
-
+    const updateFPS = (stepTime) => {
+      if(training){
+        setTitle(windowKey, 
+            <span>Trainer 
+                <span>{(1000.0/stepTime).toFixed(2)} FPS
+                </span>
+            </span>);
+      }
+      else{
+        setTitle(windowKey, 
+          <span>Trainer</span>);
+      }
+      
+  };
       // Logic to handle the message
     const handleStateMessage = (message) => {
         updateTrainingInfo(
             [message.data.iteration, message.data.totalIterations], 
             message.data.loss, message.data.stepTime);
+        setTraining(message.data.training);
     };
 
       // Logic to handle the message

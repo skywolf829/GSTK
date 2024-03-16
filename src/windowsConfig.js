@@ -23,7 +23,7 @@ export const windowsConfig = [
       tooltip: 'Connect to server',
       component: ServerConnection,
       icon: faPlug,
-      minWidth: 350,
+      minWidth: 355,
       minHeight: 125
     },
     {
@@ -60,7 +60,7 @@ export const windowsConfig = [
       component: RenderSettings,
       icon: faDesktop,
       minWidth: 350,
-      minHeight: 210
+      minHeight: 270
     }, 
     {
       key: 'toolbar',

@@ -9,7 +9,10 @@
   transform: translateX(-50%);
   z-index: 1000;
   padding: 10px;
-  background-color: #eee; /* Light gray */
+  background-color: rgba(255, 255, 255, 0.5); /* Light gray */
+  outline-color: rgba(0, 0, 0, 1);
+  outline-width: 2px;
+  outline-style: solid;
   border-radius: 8px;
 }
 
@@ -18,6 +21,7 @@
   cursor: pointer;
   padding: 10px; /* Or any other value that suits your design */
   border-radius: 8px; /* Gives a circular highlight */
+  filter: none;
   transition: background-color 0.5s; /* Smooth transition for background color change */
   transition: opacity 0.5s;
 }

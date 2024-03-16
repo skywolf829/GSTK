@@ -18,6 +18,7 @@ const RenderSettings = ({ windowKey, windowState,
     const [resolutionScaling, setResolutionScaling] = useState(1.0); 
     const [fov, setFov] = useState(70.0); 
     const [gaussianSize, setGaussianSize] = useState(1.0); 
+    const [maxFrameRate, setMaxFrameRate] = useState(30); 
     const [jpegQuality, setJpegQuality] = useState(85); 
     const [selectionTransparency, setSelectionTransparency] = useState(0.05); 
     const { registerIcon } = useIconBar();
@@ -27,11 +28,13 @@ const RenderSettings = ({ windowKey, windowState,
     
       // Logic to handle the message
     const updateRenderSettings = (message) => {
-        setResolutionScaling(message.data.resolutionScaling);
+        setRendererEnabled(message.data.renderer_enabled);
+        setResolutionScaling(message.data.resolution_scaling);
         setFov(message.data.fov);
-        setGaussianSize(message.data.gaussianSize);
-        setSelectionTransparency(message.data.selectionTransparency);
-        setJpegQuality(message.data.jpegQuality);
+        setGaussianSize(message.data.gaussian_size);
+        setSelectionTransparency(message.data.selection_transparency);
+        setJpegQuality(message.data.jpeg_quality);
+        setMaxFrameRate(message.data.max_framerate);
     };
     const updateRendererToggled = (message) => {
         setRendererEnabled(message.data.rendererEnabled);
@@ -43,7 +46,6 @@ const RenderSettings = ({ windowKey, windowState,
                 <span>{message.data.fps.toFixed(2)} FPS
                 </span>
             </span>);
-        //setTooltip(windowKey, `Render settings\nFPS: ${message.data.fps.toFixed(2)}`);
         
     };
 
@@ -76,7 +78,7 @@ const RenderSettings = ({ windowKey, windowState,
     }, [windowState.isVisible, windowState.isMinimized]);
 
     // Use the custom hook to listen for messages of type 'test'
-    useWebSocketListener(subscribe, 'renderSettings', updateRenderSettings);
+    useWebSocketListener(subscribe, 'rendererState', updateRenderSettings);
     useWebSocketListener(subscribe, 'renderEnabled', updateRendererToggled);
     useWebSocketListener(subscribe, 'rendererFPS', updateFPS);
 
@@ -88,7 +90,8 @@ const RenderSettings = ({ windowKey, windowState,
                 fov: fov,
                 gaussian_size: gaussianSize,
                 selection_transparency: selectionTransparency,
-                jpeg_quality: jpegQuality
+                jpeg_quality: jpegQuality,
+                max_framerate: maxFrameRate
             }
         };
         send(message);
@@ -220,6 +223,21 @@ const RenderSettings = ({ windowKey, windowState,
                             />
                         </div>
                         {jpegQuality}
+                    </div>
+                    <div className="info-container">
+                        <label>
+                            Max FPS:
+                        </label>
+                        <div style={{alignItems:"center", flexGrow:1}}>
+                            <input 
+                                type="number" 
+                                step="1" 
+                                min="0"
+                                max="240"
+                                value={maxFrameRate}
+                                onChange={(e) => setMaxFrameRate(parseFloat(e.target.value))}
+                            />
+                        </div>
                     </div>
                     <button onClick={handleClick}>Update settings</button>
                 </div>
