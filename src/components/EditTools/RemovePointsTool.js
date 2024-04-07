@@ -1,11 +1,20 @@
 import React, { useState } from 'react';
+import { useWebSocket } from '../WebSocketContext';
 
-const RemovePointsTool = ({ onRemovePoints }) => {
+const RemovePointsTool = () => {
   const [invertSelection, setInvertSelection] = useState(false);
-  const [percentage, setPercentage] = useState(50);
+  const [percentage, setPercentage] = useState(100);
+  const { send } = useWebSocket();
 
   const handleInvertSelectionChange = (event) => {
     setInvertSelection(event.target.checked);
+    const message = {
+      messageType: "editorSelectionInverted",
+      data: {
+        inverted: event.target.checked
+      }
+    };
+    send(message);
   };
 
   const handlePercentageChange = (event) => {
@@ -13,12 +22,17 @@ const RemovePointsTool = ({ onRemovePoints }) => {
   };
 
   const handleRemovePointsClick = () => {
-    if (onRemovePoints) {
-      onRemovePoints({
-        percentage: parseInt(percentage, 10),
-        invertSelection: invertSelection,
-      });
-    }
+    const message = {
+      messageType: "processEdit",
+      data: {
+        editType: "removePoints",
+        payload: {
+          removePercent: parseFloat(percentage),
+          invertSelection: invertSelection,
+        }
+      }
+    };
+    send(message);
   };
 
   return (

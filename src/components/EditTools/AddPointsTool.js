@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useWebSocket } from '../WebSocketContext';
 
-const AddPointsTool = ({ onAddPoints }) => {
-  const [pointCount, setPointCount] = useState(10);
+const AddPointsTool = () => {
+  const [pointCount, setPointCount] = useState(1000);
   const [distribution, setDistribution] = useState('uniform');
+  const { send } = useWebSocket();
 
   const handlePointCountChange = (event) => {
     setPointCount(event.target.value);
@@ -13,12 +15,17 @@ const AddPointsTool = ({ onAddPoints }) => {
   };
 
   const handleAddPointsClick = () => {
-    if (onAddPoints) {
-      onAddPoints({
-        count: parseInt(pointCount, 10),
-        distribution: distribution,
-      });
-    }
+    const message = {
+        messageType: "processEdit",
+        data: {
+          editType: "addPoints",
+          payload: {
+            numPoints: parseInt(pointCount),
+            distribution: distribution,
+          }
+        }
+      };
+      send(message);
   };
 
   return (

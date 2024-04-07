@@ -31,7 +31,7 @@ const ToolBar = ({ windowKey, windowState,
       const message = {
         type: "editorButtonClick",
         data: {
-          button_clicked: toolId
+          button_clicked: toolId          
         }
       };
       send(message);
