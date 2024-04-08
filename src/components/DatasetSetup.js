@@ -128,8 +128,23 @@ const DatasetSetup = ({ windowKey, windowState,
             openModal(modalContent);
         }
     }
+
+    const handleDatasetError = (message) => {
+        const data = message.data;
+        setDatasetLoaded(false);
+        setDatasetLoading(false);
+        const modalContent = (
+            <div>
+                <h3>{data.header}</h3>
+                <p>{data.body}</p>
+                <button onClick={closeModal}>Close</button>
+            </div>
+        );
+        openModal(modalContent);
+    }
     useWebSocketListener(subscribe, 'datasetState', handleDatasetSettingsMessage);
     useWebSocketListener(subscribe, 'datasetLoading', handleDatasetLoading);
+    useWebSocketListener(subscribe, 'datasetError', handleDatasetError);
 
     const handleInitializeClick = () => {
         

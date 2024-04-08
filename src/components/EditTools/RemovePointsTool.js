@@ -9,7 +9,7 @@ const RemovePointsTool = () => {
   const handleInvertSelectionChange = (event) => {
     setInvertSelection(event.target.checked);
     const message = {
-      messageType: "editorSelectionInverted",
+      type: "editorSelectionInverted",
       data: {
         inverted: event.target.checked
       }
@@ -23,7 +23,7 @@ const RemovePointsTool = () => {
 
   const handleRemovePointsClick = () => {
     const message = {
-      messageType: "processEdit",
+      type: "processEdit",
       data: {
         editType: "removePoints",
         payload: {
@@ -39,7 +39,7 @@ const RemovePointsTool = () => {
     <div className='toolbar-window-content'>
       <span>Remove Points Tool</span>
       <div>
-        <label htmlFor="invertSelection">Invert Selection:</label>
+        <label htmlFor="invertSelection">Invert View Selection:</label>
         <input
           id="invertSelection"
           type="checkbox"

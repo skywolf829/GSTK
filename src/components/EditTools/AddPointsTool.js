@@ -16,7 +16,7 @@ const AddPointsTool = () => {
 
   const handleAddPointsClick = () => {
     const message = {
-        messageType: "processEdit",
+        type: "processEdit",
         data: {
           editType: "addPoints",
           payload: {
